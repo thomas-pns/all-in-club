@@ -1,0 +1,16 @@
+{
+  "name": "all-in-club",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Poker Texas Hold'em No-Limit cartoon entre amis — All-In Club",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.0.0"
+  }
+}
