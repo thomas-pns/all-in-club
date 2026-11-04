@@ -5,6 +5,7 @@ import { Base } from './base.js';
 import { Stats, STATS_VIDES, cumulerMain, nouveauxSucces, DefinitionSucces, ContexteSucces, CADRES, DOS, SUCCES } from '../moteur/succes.js';
 import { FaitsJoueur, EnregistrementMain, filtrerEnregistrement } from '../moteur/analyse.js';
 import { SauvegardeSalle } from '../moteur/salle.js';
+import type { SauvegardeBJ } from '../moteur/blackjack/salleBJ.js';
 
 const MAINS_PAR_JOUEUR = 50;
 
@@ -176,7 +177,7 @@ export class Donnees {
 
   /* --------------------------- Tables --------------------------- */
 
-  sauverSalle(s: SauvegardeSalle) {
+  sauverSalle(s: SauvegardeSalle | SauvegardeBJ) {
     this.db.prepare('INSERT INTO salles (id, json, maj) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json, maj = excluded.maj')
       .run(s.id, JSON.stringify(s), Date.now());
   }

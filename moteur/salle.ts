@@ -909,6 +909,7 @@ export class Salle {
   resume() {
     const hote = this.humains.get(this.hote)?.membre;
     return {
+      jeu: 'poker' as const,
       id: this.id,
       nom: this.reglages.nom,
       hote: hote?.nom ?? '?',

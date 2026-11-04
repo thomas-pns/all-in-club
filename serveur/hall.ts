@@ -5,6 +5,11 @@ import type { WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
 import { Salle, CommandeClient, ReglagesSalle, REGLAGES_DEFAUT, genererCode, Membre, Sortie, MessageSalle } from '../moteur/salle.js';
 import { analyserMain } from '../moteur/analyse.js';
+import { SalleBJ, ReglagesBJ, REGLAGES_BJ_DEFAUT, CommandeBJ, MessageBJ, SortieBJ, SauvegardeBJ } from '../moteur/blackjack/salleBJ.js';
+
+/** Une table de n'importe quel jeu du club. */
+type SalleJeu = Salle | SalleBJ;
+export type Jeu = 'poker' | 'blackjack';
 import { DefinitionSucces } from '../moteur/succes.js';
 import { Utilisateur } from './comptes.js';
 import { Donnees, idUtilisateur } from './donnees.js';
@@ -15,22 +20,22 @@ import { Notifications } from './notifications.js';
 export type MessageClient =
   | { type: 'auth'; jeton: string }
   | { type: 'hall' }                                  // s'abonner à la liste des tables
-  | { type: 'creer'; reglages: Partial<ReglagesSalle> }
+  | { type: 'creer'; jeu?: Jeu; reglages: Partial<ReglagesSalle> | Partial<ReglagesBJ> }
   | { type: 'rejoindre'; id?: string; code?: string }
   | { type: 'regarder'; id: string }
   | { type: 'quitter' }
-  | { type: 'cmd'; cmd: CommandeClient }
+  | { type: 'cmd'; cmd: CommandeClient | CommandeBJ }
   | { type: 'ping' }
   | { type: 'visible'; visible: boolean };
 
-export type ResumeTable = ReturnType<Salle['resume']>;
+export type ResumeTable = ReturnType<Salle['resume']> | ReturnType<SalleBJ['resume']>;
 
 export type MessageServeur =
   | { type: 'bienvenue'; utilisateur: Utilisateur; salle: string | null }
   | { type: 'hall'; tables: ResumeTable[]; enLigne: number }
-  | { type: 'entre'; id: string; code: string }
+  | { type: 'entre'; id: string; code: string; jeu: Jeu }
   | { type: 'sorti'; raison?: string }
-  | { type: 'salle'; msg: MessageSalle }
+  | { type: 'salle'; msg: MessageSalle | MessageBJ }
   | { type: 'remplace' }
   | { type: 'succes'; succes: Omit<DefinitionSucces, 'test'>[] }
   | { type: 'erreur'; texte: string }
@@ -42,8 +47,8 @@ const memId = (u: Utilisateur) => `u${u.id}`;
 const membre = (u: Utilisateur): Membre => ({ id: memId(u), nom: u.pseudo, avatar: u.avatar, cadre: u.cadre });
 
 export class Hall {
-  private salles = new Map<string, Salle>();
-  private parCode = new Map<string, Salle>();
+  private salles = new Map<string, SalleJeu>();
+  private parCode = new Map<string, SalleJeu>();
   private ouEst = new Map<string, string>();          // membre → salle
   private clients = new Set<Client>();
   private parMembre = new Map<string, Client>();      // une connexion active par joueur
@@ -67,7 +72,9 @@ export class Hall {
       try {
         const hote = sv.joueurs.find((j) => j.membre.id === sv.hote)?.membre ?? sv.joueurs.find((j) => !j.bot)?.membre;
         if (!hote) { this.donnees.supprimerSalle(sv.id); continue; }
-        const s: Salle = new Salle({ id: sv.id, code: sv.code, hote, reglages: sv.reglages, sauvegarde: sv, sortie: this.sortie(() => s) });
+        const s: SalleJeu = (sv as unknown as SauvegardeBJ).jeu === 'blackjack'
+          ? new SalleBJ({ id: sv.id, code: sv.code, hote, reglages: (sv as unknown as SauvegardeBJ).reglages, sauvegarde: sv as unknown as SauvegardeBJ, sortie: this.sortieBJ() })
+          : new Salle({ id: sv.id, code: sv.code, hote, reglages: sv.reglages, sauvegarde: sv, sortie: this.sortie(() => s as Salle) });
         this.salles.set(s.id, s);
         this.parCode.set(s.code, s);
         for (const j of sv.joueurs) if (!j.bot) this.ouEst.set(j.membre.id, s.id);
@@ -122,7 +129,32 @@ export class Hall {
     void salle;
   }
 
-  private planifierSauvegarde(s: Salle) {
+  /** Sortie d'une table de Black Jack (pas encore de statistiques pour ce jeu). */
+  private sortieBJ(): SortieBJ {
+    return {
+      envoyer: (dest, m) => {
+        if (m.type === 'exclu') { this.ouEst.delete(dest); this.envoyerMembre(dest, { type: 'sorti', raison: "L'hôte t'a exclu de la table" }); return; }
+        this.envoyerMembre(dest, { type: 'salle', msg: m });
+      },
+      activite: (id, type) => {
+        const u = idUtilisateur(id);
+        if (u === null || !this.donnees) return;
+        const n = this.donnees.activite(u, type);
+        if (n.length) this.notifierSucces(new Map([[u, n]]));
+      },
+      modifiee: (s) => { this.planifierSauvegarde(s); this.signalerHall(); },
+      vide: (s) => this.supprimer(s),
+      tourDe: (id, s) => {
+        const u = idUtilisateur(id);
+        if (u === null || !this.notifications) return;
+        const c = this.parMembre.get(id);
+        if (c && c.visible) return;
+        void this.notifications.tour(u, s.reglages.nom).catch(() => {});
+      },
+    };
+  }
+
+  private planifierSauvegarde(s: SalleJeu) {
     if (!this.donnees || this.sauvegardes.has(s.id)) return;
     this.sauvegardes.set(s.id, setTimeout(() => {
       this.sauvegardes.delete(s.id);
@@ -186,7 +218,7 @@ export class Hall {
       this.parMembre.set(id, c);
       const s = this.salleDe(id);
       this.envoyer(c, { type: 'bienvenue', utilisateur: u, salle: s?.id ?? null });
-      if (s) { this.envoyer(c, { type: 'entre', id: s.id, code: s.code }); s.connexion(id, true); }
+      if (s) { this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: s instanceof SalleBJ ? 'blackjack' : 'poker' }); s.connexion(id, true); }
       this.signalerHall();
       return;
     }
@@ -204,16 +236,18 @@ export class Hall {
         return;
       case 'creer': {
         this.quitterSalle(id);
-        const r = { ...REGLAGES_DEFAUT, nom: `Table de ${u.pseudo}`, ...(msg.reglages ?? {}) } as ReglagesSalle;
+        const jeu: Jeu = msg.jeu === 'blackjack' ? 'blackjack' : 'poker';
         const salleId = randomBytes(6).toString('base64url');
         let code = genererCode();
         while (this.parCode.has(code)) code = genererCode();
-        const s: Salle = new Salle({ id: salleId, code, hote: membre(u), reglages: r, sortie: this.sortie(() => s) });
+        const s: SalleJeu = jeu === 'blackjack'
+          ? new SalleBJ({ id: salleId, code, hote: membre(u), reglages: { ...REGLAGES_BJ_DEFAUT, nom: `Black Jack de ${u.pseudo}`, ...(msg.reglages ?? {}) } as ReglagesBJ, sortie: this.sortieBJ() })
+          : new Salle({ id: salleId, code, hote: membre(u), reglages: { ...REGLAGES_DEFAUT, nom: `Table de ${u.pseudo}`, ...(msg.reglages ?? {}) } as ReglagesSalle, sortie: this.sortie(() => s as Salle) });
         this.planifierSauvegarde(s);
         this.salles.set(salleId, s);
         this.parCode.set(code, s);
         this.ouEst.set(id, salleId);
-        this.envoyer(c, { type: 'entre', id: salleId, code });
+        this.envoyer(c, { type: 'entre', id: salleId, code, jeu });
         s.diffuser();
         this.signalerHall();
         return;
@@ -228,7 +262,7 @@ export class Hall {
           return this.envoyer(c, { type: 'erreur', texte: 'Table privée : il faut son code' });
         if (this.ouEst.get(id) !== s.id) this.quitterSalle(id);
         this.ouEst.set(id, s.id);
-        this.envoyer(c, { type: 'entre', id: s.id, code: s.code });
+        this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: s instanceof SalleBJ ? 'blackjack' : 'poker' });
         if (msg.type === 'regarder') s.regarder(membre(u)); else s.rejoindre(membre(u));
         this.signalerHall();
         return;
@@ -241,7 +275,7 @@ export class Hall {
       case 'cmd': {
         const s = this.salleDe(id);
         if (!s) return this.envoyer(c, { type: 'erreur', texte: "Tu n'es à aucune table" });
-        s.commande(id, msg.cmd);
+        if (s instanceof SalleBJ) s.commande(id, msg.cmd as CommandeBJ); else s.commande(id, msg.cmd as CommandeClient);
         if (['lancer', 'terminer', 'rejouer', 'reglages', 'ajouterBot', 'retirerBot', 'asseoir', 'lever'].includes(msg.cmd?.c)) this.signalerHall();
         return;
       }
@@ -254,7 +288,7 @@ export class Hall {
     if (c) c.utilisateur = u;
   }
 
-  private salleDe(id: string): Salle | undefined {
+  private salleDe(id: string): SalleJeu | undefined {
     const sid = this.ouEst.get(id);
     return sid ? this.salles.get(sid) : undefined;
   }
@@ -265,7 +299,7 @@ export class Hall {
     s?.partir(id);
   }
 
-  private supprimer(s: Salle) {
+  private supprimer(s: SalleJeu) {
     s.arreter();
     this.donnees?.supprimerSalle(s.id);
     const h = this.sauvegardes.get(s.id);
