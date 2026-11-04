@@ -176,9 +176,9 @@ export function ecranCreation(racine: HTMLElement, opts: { solo: boolean; nomPar
   const blindes = [[5, 10], [10, 20], [25, 50], [50, 100], [100, 200]];
   const choix = (cle: string, valeurs: [string | number, string][], courant: string | number) =>
     `<div class="choix" data-choix="${cle}">${valeurs.map(([v, l]) => `<button type="button" data-v="${v}" class="${String(v) === String(courant) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
-  const el = html(`<div class="ecran"><div class="etroit" style="max-width:560px">
-    <div class="ligne" style="margin-bottom:16px"><button class="btn btn-rond btn-fantome" data-retour>←</button><h1 style="font-size:26px">${opts.solo ? 'Partie solo' : 'Nouvelle table'}</h1></div>
-    <form class="boite" data-form>
+  const el = html(`<div class="ecran ecran-creation"><div class="etroit" style="max-width:980px">
+    <div class="ligne" style="margin-bottom:12px"><button class="btn btn-rond btn-fantome" data-retour>←</button><h1 style="font-size:26px">${opts.solo ? 'Partie solo' : 'Nouvelle table'}</h1></div>
+    <form class="boite creation" data-form><div class="colonne">
       ${opts.solo ? '<label class="champ" style="margin-bottom:6px"><span>Ton personnage</span></label><div data-avatars style="margin-bottom:16px"></div>' : `
       <label class="champ"><span>Nom de la table</span><input type="text" name="nom" maxlength="30" value="${esc(r.nom)}"></label>
       <label class="champ"><span>Visibilité</span>${choix('visibilite', [['publique', 'Publique (dans la liste)'], ['privee', 'Privée (avec un code)']], r.visibilite)}</label>`}
@@ -187,12 +187,13 @@ export function ecranCreation(racine: HTMLElement, opts: { solo: boolean; nomPar
         <label class="champ"><span>Blindes</span><select name="pb">${blindes.map(([a, b]) => `<option value="${a}" ${a === r.pb ? 'selected' : ''}>${a} / ${b}</option>`).join('')}</select></label>
         <label class="champ"><span>Places</span><select name="places">${[2, 3, 4, 5, 6].map((n) => `<option ${n === r.places ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label class="champ"><span>Recaves</span><select name="recaves">${['interdites', 1, 2, 3, 5, 'illimitees'].map((v) => `<option value="${v}" ${String(v) === String(r.recaves) ? 'selected' : ''}>${v === 'interdites' ? 'Interdites' : v === 'illimitees' ? 'Illimitées' : `${v} par joueur`}</option>`).join('')}</select></label>
-      </div>
+      </div></div><div class="colonne">
       <label class="champ"><span>Bots</span>${choix('bots', [0, 1, 2, 3, 4, 5].map((n) => [n, n === 0 ? 'Aucun' : String(n)]), r.bots)}</label>
       <label class="champ" data-niveau-bloc><span>Niveau des bots</span>${choix('niveauBots', [['facile', 'Facile'], ['moyen', 'Moyen'], ['difficile', 'Difficile']], r.niveauBots)}</label>
       <label class="champ"><span>Fin de la partie</span>${choix('fin', [['dernier', 'Quand il reste un joueur'], ['60', 'Après 1 h'], ['120', 'Après 2 h'], ['jamais', 'Jamais']], 'dernier')}</label>
       <label class="champ"><span>Temps de réflexion</span>${choix('tempsReflexion', [[10, '10 s'], [20, '20 s'], [30, '30 s'], [0, 'Illimité']], r.tempsReflexion)}</label>
-      <button class="btn btn-or btn-plein" style="font-size:20px;margin-top:6px">${opts.solo ? 'Jouer !' : 'Créer la table'}</button>
+      </div>
+      <button class="btn btn-or btn-plein valider" style="font-size:20px">${opts.solo ? 'Jouer !' : 'Créer la table'}</button>
     </form></div></div>`);
   racine.replaceChildren(el);
   if (opts.solo) $('[data-avatars]', el).appendChild(choixAvatars(opts.avatarSolo ?? 'renard', (a) => opts.onAvatarSolo?.(a)));

@@ -58,6 +58,19 @@ input[type=text], input[type=password], input[type=email], input[type=number], s
   border: 3px solid var(--trait); border-radius: 14px; padding: 11px 14px; outline: none;
 }
 input:focus, select:focus { box-shadow: 0 0 0 4px rgba(255,194,61,.45); }
+input[type=range], input[type=range]:focus, input[type=range]:focus-visible { outline: none; box-shadow: none; border: 0; }
+button:focus { outline: none; }
+button:focus-visible { outline: 3px solid var(--or); outline-offset: 3px; }
+
+/* Création de table : deux colonnes sur grand écran, tient sans défiler */
+.creation { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; padding: 18px 20px; }
+.creation .valider { grid-column: 1 / -1; margin-top: 4px; }
+.creation label.champ { margin-bottom: 12px; }
+.creation .avatars-choix { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+@media (max-width: 760px) {
+  .creation { grid-template-columns: 1fr; }
+  .creation .avatars-choix { grid-template-columns: repeat(6, 1fr); }
+}
 .boite { background: rgba(255,255,255,.05); border: 2px solid rgba(255,255,255,.08); border-radius: 22px; padding: 20px; }
 .erreur-form { color: #FFB1A8; font-weight: 700; min-height: 20px; margin: 4px 0 10px; font-size: 14px; }
 .ligne { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
