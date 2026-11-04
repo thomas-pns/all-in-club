@@ -2,3 +2,7 @@ export * from './cartes.js';
 export * from './evaluation.js';
 export * from './main.js';
 export * from './table.js';
+export * from './bots.js';
+export * from './avatars.js';
+export * from './rythme.js';
+export * from './salle.js';
