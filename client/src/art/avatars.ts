@@ -3,6 +3,7 @@
  * Gabarit commun : boîte 200 × 200, tête décalée de 14 px vers le bas dans un médaillon rond.
  */
 import type { AvatarId } from '../../../moteur/avatars';
+import { cadreSVG } from './emotes';
 
 export type Expression = 'neutre' | 'concentre' | 'content' | 'ravi' | 'decu' | 'sueur';
 export const EXPRESSIONS: Expression[] = ['neutre', 'concentre', 'content', 'ravi', 'decu', 'sueur'];
@@ -255,7 +256,7 @@ let compteur = 0;
  * SVG d'un avatar.
  * @param anneau proportion d'anneau de temps (0..1) ou null
  */
-export function avatarSVG(id: AvatarId, ex: Expression = 'neutre', taille = 120, opts: { gris?: boolean } = {}): string {
+export function avatarSVG(id: AvatarId, ex: Expression = 'neutre', taille = 120, opts: { gris?: boolean; cadre?: string } = {}): string {
   const p = PERSOS[id] ?? PERSOS.renard;
   const v = p.visage;
   const clip = `cl${++compteur}`;
@@ -269,6 +270,7 @@ export function avatarSVG(id: AvatarId, ex: Expression = 'neutre', taille = 120,
       <g transform="translate(0,14)">${p.derriere()}${extras(v, ex)}${yeux(v, ex)}${id === 'robot' ? '' : bouche(v, ex)}${p.devant?.(ex) ?? ''}</g>
     </g>
     <circle cx="100" cy="100" r="96" fill="none" stroke="${T}" stroke-width="6"/>
+    ${opts.cadre ? cadreSVG(opts.cadre) : ''}
     </g>
   </svg>`;
 }

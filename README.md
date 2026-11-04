@@ -4,9 +4,10 @@ Poker Texas Hold'em No-Limit en cash game, entre amis, dans un style cartoon col
 Tables de 6 joueurs maximum, bots facultatifs, mode solo hors ligne. Hébergé sur un NAS Synology.
 
 > Le cahier des charges complet est dans [`PROMPT.md`](PROMPT.md). Déploiement sur le NAS : [`DEPLOIEMENT.md`](DEPLOIEMENT.md).
-> **État actuel :** moteur de règles, bots, multijoueur en ligne (comptes, hall, tables publiques/privées),
-> table animée PixiJS (12 personnages), mode solo hors ligne. Reste à faire : chat et émotes, historique,
-> statistiques, succès (jalon 4).
+> **État actuel : jalons 1 à 4 terminés.** Moteur de règles, bots, multijoueur en ligne (comptes, hall, tables
+> publiques/privées), table animée PixiJS (12 personnages), mode solo hors ligne, chat et 12 émotes, historique
+> avec lecteur pas à pas, statistiques, 25 succès (cadres et dos de cartes à débloquer), tables restaurées après
+> un redémarrage du serveur.
 
 ## Lancer en développement
 
@@ -48,7 +49,7 @@ nouveau venu qui attend la grosse blinde ou la paie pour entrer.
 
 ```bash
 npm install
-npm test          # 61 tests, dont 100 000 mains aléatoires simulées et une partie en ligne de bout en bout
+npm test          # 72 tests, dont 100 000 mains aléatoires simulées et une partie en ligne de bout en bout
 npm run typecheck
 ```
 

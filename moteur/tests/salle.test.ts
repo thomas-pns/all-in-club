@@ -251,3 +251,16 @@ describe('Salle : chat, émotes, historique, sauvegarde', () => {
     r.arreter();
   });
 });
+
+describe('Salle : départ en cours de main', () => {
+  it("un joueur qui quitte pendant une main ne fait pas planter l'affichage", () => {
+    const { salle, horloge, boite } = creer({ bots: 1, tempsReflexion: 0 });
+    salle.rejoindre({ id: 'leo', nom: 'Léo', avatar: 'ours' });
+    salle.commande('thomas', { c: 'lancer' });
+    horloge.avancer(3000);
+    expect(salle.table.mainEnCours()).toBe(true);
+    expect(() => salle.partir('leo')).not.toThrow();
+    const v = (boite.get('thomas')!.filter((m) => m.type === 'maj').at(-1) as any).etat;
+    expect(v.sieges.some((s: any) => s?.id === 'leo')).toBe(true);
+  });
+});

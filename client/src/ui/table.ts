@@ -2,7 +2,11 @@
  * Écran de table : la scène PixiJS + l'interface HTML (actions, hôte, attente, fin de partie).
  * Fonctionne de la même façon en ligne (WebSocket) et en solo (salle locale).
  */
-import type { CommandeClient, MessageSalle, VueSalle, ReglagesSalle, Resultats } from '../../../moteur/salle';
+import type { CommandeClient, MessageSalle, VueSalle, ReglagesSalle, Resultats, MessageChat } from '../../../moteur/salle';
+import type { EnregistrementMain } from '../../../moteur/analyse';
+import { EMOTES } from '../../../moteur/social';
+import { emoteSVG } from '../art/emotes';
+import { ouvrirHistorique } from './historique';
 import type { Legales, Action } from '../../../moteur/main';
 import { Scene } from '../vue/scene';
 import { jouerSon, reglerSon, debloquerSon } from '../vue/son';
@@ -39,23 +43,53 @@ export class EcranTable {
     $('.ma-main', this.el)?.classList.toggle('masquee', lirePrefs().cartesCachees && !this.revele);
   }
 
-  constructor(racine: HTMLElement, private canal: Canal, private onQuitter: () => void) {
+  private chat: MessageChat[] = [];
+  private nonLus = 0;
+  private attenteHistorique: ((m: EnregistrementMain[]) => void) | null = null;
+  private masques = new Set<string>(lireMasques());
+
+  constructor(racine: HTMLElement, private canal: Canal, private onQuitter: () => void, private opts: { dos?: string; mesMains?: () => Promise<EnregistrementMain[]> } = {}) {
     this.el = html(`<div class="ecran-table">
       <div class="barre-haut">
         <button class="btn btn-rond btn-fantome" data-quitter title="Quitter la table" aria-label="Quitter">←</button>
         <div style="min-width:0"><div class="titre" data-nom>Table</div><div class="infos" data-infos></div></div>
         <div class="espace"></div>
         <span class="code cache" data-code title="Copier le code"></span>
+        <button class="btn btn-rond btn-fantome" data-emotes title="Émotes" aria-label="Émotes">😀</button>
+        <button class="btn btn-rond btn-fantome bouton-chat" data-chat title="Chat" aria-label="Chat">💬<span class="pastille-non-lus cache" data-nonlus></span></button>
         <button class="btn btn-rond btn-fantome" data-cacher title="Cacher mes cartes (jeu côte à côte)" aria-label="Cacher mes cartes"></button>
         <button class="btn btn-rond" data-menu title="Menu" aria-label="Menu">☰</button>
       </div>
-      <div class="zone-scene" data-scene></div>
+      <div class="zone-scene" data-scene>
+        <div class="panneau-chat cache" data-panneau-chat>
+          <div class="entete-chat"><b>Chat de la table</b><button class="btn btn-petit btn-fantome" data-fermer-chat>✕</button></div>
+          <div class="messages-chat" data-messages></div>
+          <form class="saisie-chat" data-form-chat><input type="text" maxlength="200" placeholder="Écrire un message…" autocomplete="off" enterkeyhint="send"><button class="btn btn-petit btn-or">Envoyer</button></form>
+        </div>
+        <div class="roue-emotes cache" data-roue>${EMOTES.map((e) => `<button data-emote="${e.id}" title="${e.nom}">${emoteSVG(e.id, 56)}</button>`).join('')}</div>
+        <div class="bulles-chat" data-bulles></div>
+      </div>
       <div class="barre-actions" data-barre></div>
     </div>`);
     racine.replaceChildren(this.el);
     $('[data-quitter]', this.el).onclick = () => this.quitter();
     $('[data-menu]', this.el).onclick = () => this.menu();
     $('[data-code]', this.el).onclick = () => this.copierCode();
+    $('[data-chat]', this.el).onclick = () => this.basculerChat();
+    $('[data-fermer-chat]', this.el).onclick = () => this.basculerChat(false);
+    $('[data-emotes]', this.el).onclick = (e) => { e.stopPropagation(); $('[data-roue]', this.el).classList.toggle('cache'); };
+    $$('[data-emote]', this.el).forEach((b) => b.onclick = () => { this.canal.envoyer({ c: 'emote', id: b.dataset.emote! }); $('[data-roue]', this.el).classList.add('cache'); });
+    const fermerRoue = (e: Event) => { if (!(e.target as HTMLElement).closest('[data-roue],[data-emotes]')) $('[data-roue]', this.el)?.classList.add('cache'); };
+    document.addEventListener('pointerdown', fermerRoue);
+    this.nettoyages.push(() => document.removeEventListener('pointerdown', fermerRoue));
+    const fc = $('[data-form-chat]', this.el) as HTMLFormElement;
+    fc.onsubmit = (e) => {
+      e.preventDefault();
+      const i = $('input', fc) as HTMLInputElement;
+      const t = i.value.trim();
+      if (t) this.canal.envoyer({ c: 'chat', texte: t });
+      i.value = '';
+    };
     const bCacher = $('[data-cacher]', this.el);
     const majCacher = () => { const on = lirePrefs().cartesCachees; bCacher.textContent = on ? '🙈' : '👁'; bCacher.classList.toggle('btn-or', on); bCacher.classList.toggle('btn-fantome', !on); };
     majCacher();
@@ -85,7 +119,7 @@ export class EcranTable {
     await document.fonts.ready.catch(() => {});
     if (this.detruit) return;
     const p = lirePrefs();
-    this.scene = await Scene.creer($('[data-scene]', this.el), { quatreCouleurs: p.quatreCouleurs, vitesse: p.rapide ? 2 : 1, cartesCachees: p.cartesCachees });
+    this.scene = await Scene.creer($('[data-scene]', this.el), { quatreCouleurs: p.quatreCouleurs, vitesse: p.rapide ? 2 : 1, cartesCachees: p.cartesCachees, dos: this.opts.dos });
     this.scene.onRevele = (v) => { this.revele = v; this.majMaMain(); };
     if (this.detruit) { this.scene.detruire(); return; }
     this.scene.onClicSiegeVide = (s) => { if (this.etat?.monSiege === null) this.canal.envoyer({ c: 'asseoir', siege: s }); };
@@ -108,6 +142,10 @@ export class EcranTable {
     if (m.type === 'info') return toast(m.texte);
     if (m.type === 'erreur') return toast(m.texte, true);
     if (m.type === 'exclu') return;
+    if (m.type === 'chat') return this.ajouterChat(m.message, true);
+    if (m.type === 'chatHistorique') { this.chat = []; m.messages.forEach((x) => this.ajouterChat(x, false)); return; }
+    if (m.type === 'emote') { if (m.siege !== null && !this.masques.has(m.de)) void this.scene?.afficherEmote(m.siege, m.id); return; }
+    if (m.type === 'historique') { this.attenteHistorique?.(m.mains); this.attenteHistorique = null; return; }
     this.file.push(m);
     void this.traiter();
   }
@@ -394,6 +432,58 @@ export class EcranTable {
     const rj = $('[data-rejouer]', p.el); if (rj) rj.onclick = () => this.canal.envoyer({ c: 'rejouer' });
   }
 
+  /* ------------------------------ Chat ------------------------------ */
+
+  private basculerChat(ouvrir?: boolean) {
+    const p = $('[data-panneau-chat]', this.el);
+    const o = ouvrir ?? p.classList.contains('cache');
+    p.classList.toggle('cache', !o);
+    if (o) {
+      this.nonLus = 0;
+      this.majNonLus();
+      const m = $('[data-messages]', this.el); m.scrollTop = m.scrollHeight;
+      if (window.matchMedia('(pointer: fine)').matches) ($('input', p) as HTMLInputElement).focus();
+    }
+  }
+
+  private majNonLus() {
+    const b = $('[data-nonlus]', this.el);
+    b.textContent = this.nonLus > 9 ? '9+' : String(this.nonLus);
+    b.classList.toggle('cache', this.nonLus === 0);
+  }
+
+  private ajouterChat(m: MessageChat, nouveau: boolean) {
+    if (this.masques.has(m.de)) return;
+    this.chat.push(m);
+    if (this.chat.length > 100) this.chat.shift();
+    const zone = $('[data-messages]', this.el);
+    const moi = this.etat?.moi === m.de;
+    const el = html(`<div class="msg-chat ${moi ? 'moi' : ''}">${avatar(m.avatar, 'neutre', 30)}<div><button class="auteur" data-auteur>${esc(m.nom)}</button><div class="texte">${esc(m.texte)}</div></div></div>`);
+    const b = $('[data-auteur]', el);
+    b.onclick = async () => {
+      if (moi) return;
+      if (await confirmer(`Masquer ${m.nom} ? Tu ne verras plus ses messages ni ses émotes.`, 'Masquer')) {
+        this.masques.add(m.de);
+        ecrireMasques([...this.masques]);
+        toast(`${m.nom} est masqué`);
+      }
+    };
+    zone.appendChild(el);
+    while (zone.children.length > 100) zone.firstElementChild!.remove();
+    zone.scrollTop = zone.scrollHeight;
+    if (!nouveau) return;
+    const ouvert = !$('[data-panneau-chat]', this.el).classList.contains('cache');
+    if (!ouvert) {
+      if (!moi) { this.nonLus++; this.majNonLus(); jouerSon('clic'); }
+      // Petite bulle par-dessus la table
+      const bulles = $('[data-bulles]', this.el);
+      const bl = html(`<div class="bulle-chat"><b>${esc(m.nom)}</b> ${esc(m.texte)}</div>`);
+      bulles.appendChild(bl);
+      while (bulles.children.length > 3) bulles.firstElementChild!.remove();
+      setTimeout(() => { bl.classList.add('part'); setTimeout(() => bl.remove(), 400); }, 4000);
+    }
+  }
+
   /* ------------------------------ Menus ------------------------------ */
 
   private copierCode() {
@@ -421,6 +511,7 @@ export class EcranTable {
     const p = panneau(`<h2>Menu</h2>
       <div style="display:flex;flex-direction:column;gap:10px">
         ${hote ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
+        <button class="btn" data-m="historique">Historique des mains</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
         ${moi && !moi.absent && e.statut === 'en_jeu' ? '<button class="btn" data-m="absent">M\'absenter</button>' : ''}
         ${moi?.absent ? '<button class="btn" data-m="retour">Je reviens</button>' : ''}
@@ -432,6 +523,11 @@ export class EcranTable {
       switch (b.dataset.m) {
         case 'hote': return this.panneauHote();
         case 'reglages': return ouvrirReglagesPerso((oui) => this.canal.envoyer({ c: 'toujoursMontrer', oui }));
+        case 'historique': return ouvrirHistorique({
+          moi: e.moi,
+          partie: () => new Promise((ok) => { this.attenteHistorique = ok; this.canal.envoyer({ c: 'historique' }); }),
+          perso: this.opts.mesMains,
+        });
         case 'absent': return this.canal.envoyer({ c: 'absent' });
         case 'retour': return this.canal.envoyer({ c: 'retour', poster: true });
         case 'lever': return this.canal.envoyer({ c: 'lever' });
@@ -469,6 +565,7 @@ export class EcranTable {
         <label class="champ"><span>Blindes</span><select data-r="blindes">${blindes.map(([a, b]) => `<option value="${a}" ${a === r.pb ? 'selected' : ''}>${a} / ${b}</option>`).join('')}</select></label>
         <label class="champ"><span>Places</span><select data-r="places">${[2, 3, 4, 5, 6].map((n) => `<option ${n === r.places ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label class="champ"><span>Recaves</span><select data-r="recaves">${['interdites', 1, 2, 3, 5, 'illimitees'].map((v) => `<option value="${v}" ${String(v) === String(r.recaves) ? 'selected' : ''}>${v === 'interdites' ? 'Interdites' : v === 'illimitees' ? 'Illimitées' : `${v} par joueur`}</option>`).join('')}</select></label>
+        <label class="champ"><span>Filtre des insultes</span><select data-r="filtre"><option value="1" ${r.filtreInsultes ? 'selected' : ''}>Activé</option><option value="0" ${r.filtreInsultes ? '' : 'selected'}>Désactivé</option></select></label>
         <label class="champ"><span>Temps de réflexion</span><select data-r="temps">${[10, 20, 30, 0].map((v) => `<option value="${v}" ${v === r.tempsReflexion ? 'selected' : ''}>${v ? `${v} s` : 'Illimité'}</option>`).join('')}</select></label>
       </div>
       <button class="btn btn-or btn-plein" data-h="enregistrer">Enregistrer les réglages</button>`);
@@ -485,7 +582,7 @@ export class EcranTable {
           const v = (k: string) => ($(`[data-r="${k}"]`, p.el) as HTMLSelectElement).value;
           const pb = Number(v('blindes'));
           const rc = v('recaves');
-          const reglages: Partial<ReglagesSalle> = { pb, gb: pb * 2, places: Number(v('places')), tempsReflexion: Number(v('temps')), recaves: rc === 'interdites' || rc === 'illimitees' ? rc : Number(rc) };
+          const reglages: Partial<ReglagesSalle> = { pb, gb: pb * 2, places: Number(v('places')), tempsReflexion: Number(v('temps')), recaves: rc === 'interdites' || rc === 'illimitees' ? rc : Number(rc), filtreInsultes: v('filtre') === '1' };
           envoyer({ c: 'reglages', reglages });
           break;
         }
@@ -498,3 +595,7 @@ export class EcranTable {
   }
 }
 
+
+const CLE_MASQUES = 'aic-masques';
+function lireMasques(): string[] { try { return JSON.parse(localStorage.getItem(CLE_MASQUES) ?? '[]'); } catch { return []; } }
+function ecrireMasques(l: string[]) { try { localStorage.setItem(CLE_MASQUES, JSON.stringify(l)); } catch { /* rien */ } }

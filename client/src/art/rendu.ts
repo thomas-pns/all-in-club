@@ -4,6 +4,7 @@
 import { Texture, CanvasSource } from 'pixi.js';
 import type { AvatarId } from '../../../moteur/avatars';
 import { avatarSVG, Expression } from './avatars';
+import { emoteSVG, DOS_COULEURS } from './emotes';
 
 export const T = '#2A1E3F';
 
@@ -24,18 +25,34 @@ export function svgVersImage(svg: string): Promise<HTMLImageElement> {
   return img.decode().then(() => img);
 }
 
-export function textureAvatar(id: AvatarId, ex: Expression, gris = false): Promise<Texture> {
-  const cle = `${id}:${ex}:${gris}`;
+export function textureAvatar(id: AvatarId, ex: Expression, gris = false, cadre = 'aucun'): Promise<Texture> {
+  const cle = `${id}:${ex}:${gris}:${cadre}`;
   let p = cacheAvatars.get(cle);
   if (!p) {
     const taille = Math.round(160 * RESOLUTION);
-    p = svgVersImage(avatarSVG(id, ex, taille, { gris })).then((img) => {
+    p = svgVersImage(avatarSVG(id, ex, taille, { gris, cadre })).then((img) => {
       const c = document.createElement('canvas');
       c.width = c.height = taille;
       c.getContext('2d')!.drawImage(img, 0, 0, taille, taille);
       return textureCanvas(c, RESOLUTION);
     });
     cacheAvatars.set(cle, p);
+  }
+  return p;
+}
+
+const cacheEmotes = new Map<string, Promise<Texture>>();
+export function textureEmote(id: string): Promise<Texture> {
+  let p = cacheEmotes.get(id);
+  if (!p) {
+    const taille = Math.round(110 * RESOLUTION);
+    p = svgVersImage(emoteSVG(id, taille)).then((img) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = taille;
+      c.getContext('2d')!.drawImage(img, 0, 0, taille, taille);
+      return textureCanvas(c, RESOLUTION);
+    });
+    cacheEmotes.set(id, p);
   }
   return p;
 }
@@ -85,7 +102,7 @@ function dessinerSymbole(ctx: CanvasRenderingContext2D, s: number, x: number, y:
 }
 
 /** Canvas d'une carte (null = dos). Échelle 2 pour la netteté. */
-export function canvasCarte(carte: number | null, quatre: boolean, echelle = 2.4): HTMLCanvasElement {
+export function canvasCarte(carte: number | null, quatre: boolean, echelle = 2.4, dos = 'prune'): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = Math.round(CARTE_L * echelle);
   c.height = Math.round(CARTE_H * echelle);
@@ -98,20 +115,25 @@ export function canvasCarte(carte: number | null, quatre: boolean, echelle = 2.4
   ctx.strokeStyle = T;
   ctx.stroke();
   if (carte === null) {
+    const [fond, rayure, medaillon] = DOS_COULEURS[dos] ?? DOS_COULEURS.prune;
     ctx.save();
     arrondi(ctx, 9, 9, 82, 122, 7);
     ctx.clip();
-    ctx.fillStyle = '#8E5BD6';
+    ctx.fillStyle = fond;
     ctx.fillRect(0, 0, 100, 140);
-    ctx.strokeStyle = '#7C49C4';
+    ctx.strokeStyle = rayure;
     ctx.lineWidth = 5;
     for (let i = -140; i < 140; i += 12) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 140, 140); ctx.stroke(); }
     ctx.restore();
     arrondi(ctx, 9, 9, 82, 122, 7);
     ctx.lineWidth = 2.5; ctx.strokeStyle = T; ctx.stroke();
+    if (dos === 'nuit' || dos === 'legende') {
+      ctx.fillStyle = 'rgba(255,244,223,.8)';
+      for (const [x, y, r] of [[22, 26, 2], [74, 34, 2.5], [30, 108, 2], [70, 112, 1.6], [50, 24, 1.4], [80, 86, 1.8], [20, 70, 1.5]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); }
+    }
     ctx.beginPath(); ctx.arc(50, 70, 22, 0, Math.PI * 2);
-    ctx.fillStyle = '#FFC23D'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
-    ctx.fillStyle = T;
+    ctx.fillStyle = medaillon; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = T; ctx.stroke();
+    ctx.fillStyle = medaillon === T ? '#FFC23D' : T;
     ctx.font = '700 30px Fredoka, Nunito, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -132,16 +154,16 @@ export function canvasCarte(carte: number | null, quatre: boolean, echelle = 2.4
   return c;
 }
 
-let cacheCartes: { quatre: boolean; textures: Texture[]; dos: Texture } | null = null;
+let cacheCartes: { quatre: boolean; textures: Texture[] } | null = null;
+const cacheDos = new Map<string, Texture>();
 
-/** Les 52 textures + le dos, régénérées si l'option 4 couleurs change. */
-export function texturesCartes(quatre: boolean) {
-  if (cacheCartes && cacheCartes.quatre === quatre) return cacheCartes;
+/** Les 52 textures + le dos choisi, régénérées si l'option 4 couleurs change. */
+export function texturesCartes(quatre: boolean, dos = 'prune') {
   const versTexture = (cv: HTMLCanvasElement) => textureCanvas(cv, 2.4);
-  const textures = Array.from({ length: 52 }, (_, i) => versTexture(canvasCarte(i, quatre)));
-  const dos = cacheCartes?.dos ?? versTexture(canvasCarte(null, quatre));
-  cacheCartes = { quatre, textures, dos };
-  return cacheCartes;
+  if (!cacheCartes || cacheCartes.quatre !== quatre) cacheCartes = { quatre, textures: Array.from({ length: 52 }, (_, i) => versTexture(canvasCarte(i, quatre))) };
+  let d = cacheDos.get(dos);
+  if (!d) { d = versTexture(canvasCarte(null, quatre, 2.4, dos)); cacheDos.set(dos, d); }
+  return { quatre, textures: cacheCartes.textures, dos: d };
 }
 
 /* ------------------------------ Jetons ------------------------------ */

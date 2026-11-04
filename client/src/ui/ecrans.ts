@@ -7,7 +7,10 @@ import type { AvatarId } from '../../../moteur/avatars';
 import type { Utilisateur } from '../../../serveur/comptes';
 import type { ResumeTable } from '../../../serveur/hall';
 import { api, ErreurApi, enregistrerJeton } from '../reseau';
-import { fmt } from '../art/rendu';
+import { fmt, canvasCarte } from '../art/rendu';
+import { avatarSVG } from '../art/avatars';
+import type { Stats } from '../../../moteur/succes';
+import { jouerSon } from '../vue/son';
 import { $, $$, esc, html, toast, panneau, avatar, choixAvatars, logoHTML, ouvrirReglagesPerso } from './commun';
 
 function erreurForm(el: HTMLElement, e: unknown) {
@@ -111,6 +114,7 @@ export interface ActionsHall {
   regarder: (id: string) => void;
   solo: () => void;
   profil: () => void;
+  joueurs: () => void;
 }
 
 export class EcranHall {
@@ -118,11 +122,12 @@ export class EcranHall {
   constructor(racine: HTMLElement, private u: Utilisateur, private a: ActionsHall) {
     this.el = html(`<div class="ecran"><div class="centre">
       <div class="entete">${logoHTML('font-size:clamp(30px,6vw,44px)')}
-        <button class="profil-mini" data-profil>${avatar(u.avatar, 'content', 42)}<span>${esc(u.pseudo)}</span></button></div>
+        <button class="profil-mini" data-profil>${avatarSVG(u.avatar, 'content', 42, { cadre: u.cadre })}<span>${esc(u.pseudo)}</span></button></div>
       <div class="actions-hall">
         <button class="btn btn-or" data-a="creer">＋ Créer une table</button>
         <button class="btn btn-ciel" data-a="code">🔑 Rejoindre avec un code</button>
         <button class="btn" data-a="solo">🤖 Jouer en solo</button>
+        <button class="btn" data-a="joueurs">👥 Les joueurs</button>
       </div>
       <div class="ligne" style="justify-content:space-between;margin-bottom:12px"><h2>Tables ouvertes</h2><span class="doux petit" data-enligne></span></div>
       <div data-tables><div class="vide-liste">Chargement…</div></div>
@@ -131,6 +136,7 @@ export class EcranHall {
     $('[data-profil]', this.el).onclick = () => a.profil();
     $('[data-a="creer"]', this.el).onclick = () => a.creer();
     $('[data-a="solo"]', this.el).onclick = () => a.solo();
+    $('[data-a="joueurs"]', this.el).onclick = () => a.joueurs();
     $('[data-a="code"]', this.el).onclick = () => {
       const p = panneau(`<h2>Rejoindre une table</h2><form><label class="champ"><span>Code de la table (5 lettres)</span>
         <input type="text" name="code" maxlength="5" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;letter-spacing:6px;font-family:Fredoka;font-size:26px;text-align:center" required></label>
@@ -227,13 +233,107 @@ export function ecranCreation(racine: HTMLElement, opts: { solo: boolean; nomPar
   };
 }
 
-/* ------------------------------ Profil ------------------------------ */
+/* ------------------------------ Joueurs et profils ------------------------------ */
 
-export function ecranProfil(racine: HTMLElement, u: Utilisateur, opts: { onRetour: () => void; onMaj: (u: Utilisateur) => void; onDeconnexion: () => void }) {
-  const el = html(`<div class="ecran"><div class="etroit" style="max-width:560px">
-    <div class="ligne" style="margin-bottom:16px"><button class="btn btn-rond btn-fantome" data-retour>←</button><h1 style="font-size:26px">Mon profil</h1></div>
+const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)} %` : '—');
+
+export async function ecranJoueurs(racine: HTMLElement, opts: { onRetour: () => void; onProfil: (pseudo: string) => void }) {
+  const el = html(`<div class="ecran"><div class="centre">
+    <div class="ligne" style="margin-bottom:16px"><button class="btn btn-rond btn-fantome" data-retour>←</button><h1 style="font-size:26px">Les joueurs du club</h1></div>
+    <div data-liste><div class="doux">Chargement…</div></div></div></div>`);
+  racine.replaceChildren(el);
+  $('[data-retour]', el).onclick = () => opts.onRetour();
+  try {
+    const { joueurs } = await api<{ joueurs: { pseudo: string; avatar: AvatarId; cadre: string; mains: number; parties: number; partiesGagnees: number; bilanTapis: number; succes: number }[] }>('/api/joueurs');
+    joueurs.sort((a, b) => b.bilanTapis - a.bilanTapis || b.mains - a.mains);
+    $('[data-liste]', el).innerHTML = `<div class="liste-joueurs-club">${joueurs.map((j, i) => `
+      <button class="carte-joueur" data-p="${esc(j.pseudo)}">${avatarSVG(j.avatar, 'content', 56, { cadre: j.cadre })}
+        <span><b>${i < 3 && j.mains ? ['🥇', '🥈', '🥉'][i] + ' ' : ''}${esc(j.pseudo)}</b>
+        <span class="doux petit">${fmt(j.mains)} mains · ${j.partiesGagnees}/${j.parties} parties gagnées</span><br>
+        <span class="petit" style="font-weight:800;color:${j.bilanTapis >= 0 ? '#7EE2A4' : '#FFB1A8'}">${j.bilanTapis >= 0 ? '+' : ''}${j.bilanTapis.toLocaleString('fr-FR')} tapis</span>
+        <span class="doux petit"> · ${j.succes} succès</span></span></button>`).join('')}</div>`;
+    $$('[data-p]', el).forEach((b) => b.onclick = () => opts.onProfil(b.dataset.p!));
+  } catch (e) { erreurForm(el, e); $('[data-liste]', el).textContent = e instanceof Error ? e.message : 'Erreur'; }
+}
+
+interface DefSucces { id: string; titre: string; description: string; icone: string; recompense?: { type: 'cadre' | 'dos'; id: string; nom: string } }
+
+export async function ecranProfilJoueur(racine: HTMLElement, pseudo: string, moi: Utilisateur, opts: { onRetour: () => void; onMaj: (u: Utilisateur) => void; onDeconnexion: () => void }) {
+  const soi = pseudo.toLowerCase() === moi.pseudo.toLowerCase();
+  const el = html(`<div class="ecran"><div class="centre" style="max-width:900px">
+    <div class="ligne" style="margin-bottom:16px"><button class="btn btn-rond btn-fantome" data-retour>←</button><h1 style="font-size:26px">${soi ? 'Mon profil' : 'Profil'}</h1></div>
+    <div data-contenu><div class="doux">Chargement…</div></div></div></div>`);
+  racine.replaceChildren(el);
+  $('[data-retour]', el).onclick = () => opts.onRetour();
+  let profil: { joueur: { pseudo: string; avatar: AvatarId; cadre: string; cree: number }; stats: Stats; succes: { id: string; date: number }[] };
+  let defs: { succes: DefSucces[]; cadres: { id: string; nom: string }[]; dos: { id: string; nom: string }[] };
+  let recomp: { cadres: string[]; dos: string[] } | null = null;
+  try {
+    [profil, defs, recomp] = await Promise.all([
+      api(`/api/joueurs/${encodeURIComponent(pseudo)}`), api('/api/succes'), soi ? api('/api/moi/recompenses') : Promise.resolve(null),
+    ]);
+  } catch (e) { $('[data-contenu]', el).textContent = e instanceof Error ? e.message : 'Erreur'; return; }
+  const s = profil.stats;
+  const obtenus = new Map(profil.succes.map((x) => [x.id, x.date]));
+  const j = profil.joueur;
+  const stats: [string, string][] = [
+    ['Mains jouées', fmt(s.mains)],
+    ['Parties gagnées', `${s.partiesGagnees} / ${s.parties}`],
+    ['Bilan', `${s.bilanTapis >= 0 ? '+' : ''}${s.bilanTapis.toLocaleString('fr-FR')} tapis`],
+    ['Meilleure partie', `+${s.meilleurePartie.toLocaleString('fr-FR')} tapis`],
+    ['Mains jouées volontairement', pct(s.vpip, s.mains)],
+    ['Relances avant le flop', pct(s.pfr, s.mains)],
+    ['Agressivité', s.passifs ? (s.agressions / s.passifs).toFixed(1) : s.agressions ? '∞' : '—'],
+    ['Abattages gagnés', pct(s.abattagesGagnes, s.abattages)],
+    ['Pots gagnés sans montrer', fmt(s.gainsSansAbattage)],
+    ['Plus gros pot', fmt(s.plusGrosPot)],
+    ['Meilleure main', s.meilleureTexte || '—'],
+    ['Joueurs éliminés', fmt(s.elimines)],
+  ];
+  const contenu = $('[data-contenu]', el);
+  contenu.innerHTML = `
+    <div class="boite" style="margin-bottom:16px"><div class="ligne">
+      <div data-grand>${avatarSVG(j.avatar, 'ravi', 96, { cadre: j.cadre })}</div>
+      <div><h2 style="font-size:28px">${esc(j.pseudo)}</h2><div class="doux">Membre depuis le ${new Date(j.cree).toLocaleDateString('fr-FR')} · ${obtenus.size} / ${defs.succes.length} succès</div></div>
+    </div></div>
+    <h2 style="margin:18px 0 10px">Statistiques</h2>
+    <div class="stats-grille">${stats.map(([l, v]) => `<div class="stat"><b>${esc(v)}</b><span>${l}</span></div>`).join('')}</div>
+    ${soi ? `<h2 style="margin:22px 0 10px">Cadre d'avatar</h2><div class="cosmetiques" data-cadres></div>
+      <h2 style="margin:18px 0 10px">Dos de cartes</h2><div class="cosmetiques" data-dos></div>` : ''}
+    <h2 style="margin:22px 0 10px">Succès</h2>
+    <div class="succes-grille">${defs.succes.map((d) => {
+      const date = obtenus.get(d.id);
+      return `<div class="succes ${date ? '' : 'verrouille'}"><span class="icone">${d.icone}</span><span><b>${esc(d.titre)}</b><small>${esc(d.description)}</small>
+        ${d.recompense ? `<small class="recomp">🎁 ${d.recompense.type === 'cadre' ? 'Cadre' : 'Dos'} « ${esc(d.recompense.nom)} »</small>` : ''}
+        ${date ? `<small>Obtenu le ${new Date(date).toLocaleDateString('fr-FR')}</small>` : ''}</span></div>`;
+    }).join('')}</div>
+    ${soi ? '<div data-compte style="margin-top:26px"></div>' : ''}`;
+
+  if (!soi || !recomp) return;
+  const r = recomp;
+  const cosm = (zone: string, liste: { id: string; nom: string }[], dispo: string[], courant: string, dessin: (id: string) => string, cle: 'cadre' | 'dos') => {
+    const z = $(zone, contenu);
+    z.innerHTML = liste.map((c) => `<button data-c="${c.id}" class="${c.id === courant ? 'on' : ''}" ${dispo.includes(c.id) ? '' : 'disabled title="À débloquer avec un succès"'}>${dessin(c.id)}${esc(c.nom)}${dispo.includes(c.id) ? '' : ' 🔒'}</button>`).join('');
+    $$('[data-c]', z).forEach((b) => b.onclick = async () => {
+      try {
+        const res = await api('/api/moi', { [cle]: b.dataset.c }, 'PATCH');
+        moi = res.utilisateur; opts.onMaj(moi);
+        $$('[data-c]', z).forEach((x) => x.classList.toggle('on', x === b));
+        if (cle === 'cadre') $('[data-grand]', contenu).innerHTML = avatarSVG(moi.avatar, 'ravi', 96, { cadre: moi.cadre });
+      } catch (e) { toast(e instanceof Error ? e.message : 'Erreur', true); }
+    });
+  };
+  cosm('[data-cadres]', defs.cadres, r.cadres, moi.cadre, (id) => avatarSVG(moi.avatar, 'neutre', 54, { cadre: id }), 'cadre');
+  cosm('[data-dos]', defs.dos, r.dos, moi.dos, (id) => `<img src="${canvasCarte(null, false, 1, id).toDataURL()}" style="width:40px;height:56px;display:block">`, 'dos');
+  ecranCompte($('[data-compte]', contenu), moi, opts);
+}
+
+/* ------------------------------ Compte ------------------------------ */
+
+function ecranCompte(zone: HTMLElement, u: Utilisateur, opts: { onMaj: (u: Utilisateur) => void; onDeconnexion: () => void }) {
+  const el = html(`<div>
+    <h2 style="margin-bottom:10px">Mon compte</h2>
     <div class="boite" style="margin-bottom:16px">
-      <div class="ligne" style="margin-bottom:14px">${avatar(u.avatar, 'ravi', 72).replace('<svg', '<svg data-grand')}<div><h2>${esc(u.pseudo)}</h2><div class="doux petit">Membre depuis le ${new Date(u.cree).toLocaleDateString('fr-FR')}</div></div></div>
       <label class="champ" style="margin-bottom:6px"><span>Mon personnage</span></label><div data-avatars></div>
     </div>
     <form class="boite" style="margin-bottom:16px" data-email>
@@ -246,11 +346,10 @@ export function ecranProfil(racine: HTMLElement, u: Utilisateur, opts: { onRetou
       <div class="erreur-form"></div><button class="btn btn-petit">Changer le mot de passe</button>
     </form>
     <div class="ligne"><button class="btn" data-reglages>Réglages du jeu</button><button class="btn btn-corail" data-deco>Se déconnecter</button></div>
-  </div></div>`);
-  racine.replaceChildren(el);
-  $('[data-retour]', el).onclick = () => opts.onRetour();
+  </div>`);
+  zone.replaceChildren(el);
   $('[data-avatars]', el).appendChild(choixAvatars(u.avatar, async (a) => {
-    try { const r = await api('/api/moi', { avatar: a }, 'PATCH'); u = r.utilisateur; opts.onMaj(u); $('[data-grand]', el).outerHTML = avatar(a, 'ravi', 72).replace('<svg', '<svg data-grand'); }
+    try { const r = await api('/api/moi', { avatar: a }, 'PATCH'); u = r.utilisateur; opts.onMaj(u); toast('Personnage changé'); }
     catch (e) { toast(e instanceof Error ? e.message : 'Erreur', true); }
   }));
   const fe = $('[data-email]', el) as HTMLFormElement;
@@ -270,4 +369,23 @@ export function ecranProfil(racine: HTMLElement, u: Utilisateur, opts: { onRetou
   };
   $('[data-reglages]', el).onclick = () => ouvrirReglagesPerso((oui) => void api('/api/moi', { toujoursMontrer: oui }, 'PATCH').catch(() => {}));
   $('[data-deco]', el).onclick = () => opts.onDeconnexion();
+}
+
+/** Bandeau doré quand un succès est débloqué. */
+const fileSucces: DefSucces[] = [];
+let annonceEnCours = false;
+export function annoncerSucces(liste: DefSucces[]) {
+  fileSucces.push(...liste);
+  if (annonceEnCours) return;
+  const suivant = () => {
+    const d = fileSucces.shift();
+    if (!d) { annonceEnCours = false; return; }
+    annonceEnCours = true;
+    const b = html(`<div class="annonce-succes"><span class="icone">${d.icone}</span><div><small>Succès débloqué !</small><b>${esc(d.titre)}</b>
+      <span>${esc(d.description)}${d.recompense ? ` · 🎁 ${d.recompense.type === 'cadre' ? 'cadre' : 'dos de cartes'} « ${esc(d.recompense.nom)} »` : ''}</span></div></div>`);
+    document.body.appendChild(b);
+    jouerSon('grosGain');
+    setTimeout(() => { b.style.transition = 'opacity .4s, transform .4s'; b.style.opacity = '0'; setTimeout(() => { b.remove(); suivant(); }, 400); }, 3800);
+  };
+  suivant();
 }

@@ -253,3 +253,93 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 3px; }
   .actions-principales { gap: 8px; }
   .barre-haut .infos.facultatif { display: none; }
 }
+
+/* ---------- Chat et émotes ---------- */
+.bouton-chat { position: relative; }
+.pastille-non-lus { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--corail); color: #fff; font-size: 12px; font-weight: 800; display: grid; place-items: center; padding: 0 5px; border: 2px solid var(--trait); }
+.panneau-chat {
+  position: absolute; right: 10px; top: 6px; bottom: 6px; width: min(340px, calc(100% - 20px)); z-index: 6;
+  background: rgba(35, 26, 59, .96); border: 3px solid var(--trait); border-radius: 20px; display: flex; flex-direction: column;
+  box-shadow: 0 8px 0 rgba(0,0,0,.3); animation: monte .2s;
+}
+.entete-chat { display: flex; justify-content: space-between; align-items: center; padding: 8px 8px 6px 14px; font-family: Fredoka; font-size: 17px; }
+.messages-chat { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 8px; }
+.msg-chat { display: flex; gap: 8px; align-items: flex-start; }
+.msg-chat svg { flex: none; width: 30px; height: 30px; }
+.msg-chat .auteur { background: none; border: 0; padding: 0; font: inherit; font-weight: 800; font-size: 13px; color: var(--or); cursor: pointer; }
+.msg-chat.moi .auteur { color: var(--ciel); cursor: default; }
+.msg-chat .texte { background: var(--nuit3); border-radius: 4px 14px 14px 14px; padding: 6px 10px; font-size: 14.5px; word-break: break-word; -webkit-user-select: text; user-select: text; }
+.saisie-chat { display: flex; gap: 6px; padding: 8px; border-top: 2px solid rgba(255,255,255,.06); }
+.saisie-chat input { font-size: 15px; padding: 9px 12px; border-radius: 12px; }
+.roue-emotes {
+  position: absolute; right: 10px; top: 6px; z-index: 7; display: grid; grid-template-columns: repeat(4, 64px); gap: 6px; padding: 10px;
+  background: rgba(35, 26, 59, .96); border: 3px solid var(--trait); border-radius: 22px; box-shadow: 0 8px 0 rgba(0,0,0,.3); animation: monte .18s;
+}
+.roue-emotes button { background: none; border: 0; padding: 4px; border-radius: 14px; cursor: pointer; transition: transform .1s; }
+.roue-emotes button:hover { background: rgba(255,255,255,.08); transform: scale(1.08); }
+.roue-emotes button:active { transform: scale(.94); }
+.roue-emotes svg { width: 56px; height: 56px; display: block; }
+.bulles-chat { position: absolute; left: 10px; top: 8px; z-index: 5; display: flex; flex-direction: column; gap: 6px; max-width: min(360px, 70%); pointer-events: none; }
+.bulle-chat { background: rgba(255, 244, 223, .95); color: var(--trait); border: 3px solid var(--trait); border-radius: 4px 16px 16px 16px; padding: 6px 12px; font-size: 14px; font-weight: 600; animation: monte .2s; transition: opacity .4s, transform .4s; }
+.bulle-chat.part { opacity: 0; transform: translateY(-8px); }
+@media (max-width: 600px) {
+  .panneau-chat { left: 6px; right: 6px; width: auto; top: auto; height: 62%; }
+  .roue-emotes { grid-template-columns: repeat(4, 58px); right: 6px; }
+}
+
+/* ---------- Historique et relecture ---------- */
+.panneau.panneau-large { max-width: 1000px; }
+.liste-mains { display: flex; flex-direction: column; gap: 8px; max-height: 64dvh; overflow-y: auto; }
+.ligne-main {
+  display: grid; grid-template-columns: 64px auto auto 1fr auto; gap: 12px; align-items: center; text-align: left; width: 100%;
+  background: var(--nuit3); border: 2.5px solid var(--trait); border-radius: 14px; padding: 8px 12px; color: var(--creme); font: inherit; cursor: pointer;
+}
+.ligne-main:hover { filter: brightness(1.12); }
+.ligne-main .num { font-family: Fredoka; font-weight: 700; font-size: 18px; display: flex; flex-direction: column; line-height: 1.1; }
+.ligne-main .num small { font-size: 12px; color: var(--doux); font-weight: 600; }
+.ligne-main .resume { font-size: 14px; font-weight: 700; }
+.ligne-main .bilan { font-family: Fredoka; font-weight: 700; font-size: 18px; min-width: 60px; text-align: right; }
+@media (max-width: 600px) {
+  .ligne-main { grid-template-columns: 48px auto 1fr auto; }
+  .ligne-main .tableau { display: none; }
+}
+.mini-carte { display: inline-block; min-width: 30px; padding: 3px 4px; margin-right: 3px; border-radius: 6px; background: #FFFDF7; border: 2px solid var(--trait); font-family: Fredoka; font-weight: 700; font-size: 14px; text-align: center; line-height: 1.2; }
+.mini-carte.noir { color: var(--trait); } .mini-carte.rouge { color: #E5484D; } .mini-carte.bleu { color: #2F80ED; } .mini-carte.vert { color: #25A05C; }
+.mini-carte.dos { background: repeating-linear-gradient(45deg, #8E5BD6 0 4px, #7C49C4 4px 8px); height: 26px; vertical-align: middle; }
+.relecture-scene { position: relative; height: min(56dvh, 520px); border-radius: 18px; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #3D2C66, #231A3B 70%); }
+.relecture-scene canvas { position: absolute; inset: 0; }
+.relecture-texte { text-align: center; font-family: Fredoka; font-weight: 600; font-size: 18px; color: var(--or); margin: 12px 0 10px; min-height: 24px; }
+.relecture-commandes { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+
+/* ---------- Joueurs, profil, succès ---------- */
+.liste-joueurs-club { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.carte-joueur { display: flex; gap: 12px; align-items: center; background: var(--nuit2); border: 3px solid var(--trait); border-radius: 18px; padding: 10px 14px; cursor: pointer; color: var(--creme); font: inherit; text-align: left; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.carte-joueur:hover { filter: brightness(1.1); }
+.carte-joueur svg { width: 56px; height: 56px; flex: none; }
+.carte-joueur b { font-family: Fredoka; font-weight: 600; font-size: 18px; display: block; }
+.stats-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.stat { background: var(--nuit3); border-radius: 14px; padding: 10px 12px; }
+.stat b { display: block; font-family: Fredoka; font-weight: 700; font-size: 22px; color: var(--or); }
+.stat span { font-size: 13px; color: var(--doux); font-weight: 700; }
+.succes-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.succes { display: flex; gap: 10px; align-items: center; background: var(--nuit3); border: 2.5px solid var(--trait); border-radius: 14px; padding: 8px 10px; }
+.succes .icone { font-size: 28px; width: 44px; height: 44px; display: grid; place-items: center; background: var(--nuit); border-radius: 50%; flex: none; }
+.succes b { font-family: Fredoka; font-weight: 600; display: block; }
+.succes small { color: var(--doux); font-size: 12.5px; display: block; line-height: 1.3; }
+.succes.verrouille { opacity: .45; filter: grayscale(1); }
+.succes .recomp { color: var(--or); font-weight: 800; }
+.cosmetiques { display: flex; gap: 10px; flex-wrap: wrap; }
+.cosmetiques button { background: var(--nuit3); border: 3px solid var(--trait); border-radius: 16px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--creme); font: inherit; font-size: 12px; font-weight: 800; min-width: 74px; }
+.cosmetiques button.on { border-color: var(--or); box-shadow: 0 0 0 3px var(--or); }
+.cosmetiques button:disabled { opacity: .35; cursor: not-allowed; }
+.cosmetiques svg { width: 54px; height: 54px; }
+.annonce-succes {
+  position: fixed; left: 50%; top: calc(14px + var(--haut)); transform: translateX(-50%); z-index: 70; display: flex; gap: 12px; align-items: center;
+  background: linear-gradient(#FFD25E, #F2A516); color: var(--trait); border: 4px solid var(--trait); border-radius: 20px; padding: 10px 18px 10px 12px;
+  box-shadow: 0 8px 0 rgba(0,0,0,.35); animation: succes .6s cubic-bezier(.3,1.6,.5,1); max-width: 92vw;
+}
+.annonce-succes .icone { font-size: 34px; width: 54px; height: 54px; display: grid; place-items: center; background: var(--creme); border-radius: 50%; border: 3px solid var(--trait); flex: none; }
+.annonce-succes small { display: block; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.annonce-succes b { font-family: Fredoka; font-size: 20px; display: block; }
+.annonce-succes span { font-size: 13px; font-weight: 700; }
+@keyframes succes { from { transform: translate(-50%, -40px) scale(.6); opacity: 0; } }

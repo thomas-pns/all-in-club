@@ -7,7 +7,7 @@ import type { VueSalle, VueSiege, EvenementPublic } from '../../../moteur/salle'
 import type { AvatarId } from '../../../moteur/avatars';
 import { RYTHME } from '../../../moteur/rythme';
 import { Animateur, EASE } from './anim';
-import { textureAvatar, texturesCartes, decomposer, fmt, CARTE_L, textureCanvas } from '../art/rendu';
+import { textureAvatar, texturesCartes, decomposer, fmt, CARTE_L, textureCanvas, textureEmote } from '../art/rendu';
 import { Expression } from '../art/avatars';
 import { jouerSon } from './son';
 import { evaluer, decrire } from '../../../moteur/evaluation';
@@ -134,7 +134,7 @@ function pastille(texte: string, fond: number, couleur: number, taille = 17): Co
 
 /* ------------------------------ Scène ------------------------------ */
 
-export interface OptionsScene { quatreCouleurs: boolean; vitesse: number; cartesCachees: boolean }
+export interface OptionsScene { quatreCouleurs: boolean; vitesse: number; cartesCachees: boolean; dos?: string }
 
 export class Scene {
   app!: Application;
@@ -195,10 +195,10 @@ export class Scene {
   }
 
   options(o: Partial<OptionsScene>) {
-    const avant = this.opts.quatreCouleurs;
+    const avant = `${this.opts.quatreCouleurs}|${this.opts.dos}`;
     Object.assign(this.opts, o);
     this.anim.vitesse = this.opts.vitesse;
-    if (o.quatreCouleurs !== undefined && o.quatreCouleurs !== avant && this.etat) this.appliquerEtat(this.etat, true);
+    if (`${this.opts.quatreCouleurs}|${this.opts.dos}` !== avant && this.etat) this.appliquerEtat(this.etat, true);
     else this.majMesCartes();
   }
 
@@ -414,7 +414,7 @@ export class Scene {
   }
 
   private nouvelleCarte(w: number): Sprite {
-    const sp = new Sprite(texturesCartes(this.opts.quatreCouleurs).dos);
+    const sp = new Sprite(texturesCartes(this.opts.quatreCouleurs, this.opts.dos).dos);
     sp.anchor.set(0.5);
     sp.scale.set(w / CARTE_L);
     this.coucheCartes.addChild(sp);
@@ -422,7 +422,7 @@ export class Scene {
   }
 
   private textureCarte(c: number | null) {
-    const t = texturesCartes(this.opts.quatreCouleurs);
+    const t = texturesCartes(this.opts.quatreCouleurs, this.opts.dos);
     return c === null ? t.dos : t.textures[c];
   }
 
@@ -543,11 +543,11 @@ export class Scene {
   private async majAvatar(sv: VueSiegeScene, s: VueSiege, e: VueSalle) {
     const ex = this.expressionDe(s, e, sv);
     const gris = s.absent || s.deconnecte || (s.tapis === 0 && !s.dansLaMain) || (s.couche && e.mainEnCours);
-    const cle = `${s.avatar}:${ex}:${gris}`;
+    const cle = `${s.avatar}:${ex}:${gris}:${s.cadre}`;
     if (sv.expression === cle && sv.avatarId === s.avatar) return;
     sv.expression = cle;
     sv.avatarId = s.avatar;
-    const t = await textureAvatar(s.avatar, ex, gris);
+    const t = await textureAvatar(s.avatar, ex, gris, s.cadre);
     if (sv.expression !== cle || sv.avatar.destroyed) return;
     sv.avatar.texture = t;
     sv.avatar.width = sv.avatar.height = this.geo.avatar;
@@ -904,6 +904,31 @@ export class Scene {
       }
     }
     this.appliquerEtat(apres);
+  }
+
+  /** Émote affichée en grand au-dessus d'un avatar. */
+  async afficherEmote(siege: number, id: string) {
+    const sv = this.sieges.get(siege);
+    if (!sv || sv.vide) return;
+    const tex = await textureEmote(id);
+    if (sv.cont.destroyed) return;
+    const sp = new Sprite(tex);
+    sp.anchor.set(0.5);
+    const taille = this.geo.avatar * 0.95;
+    sp.width = sp.height = taille;
+    const base = sp.scale.x;
+    sp.scale.set(0.1);
+    // Au-dessus de l'avatar, ou en dessous pour les sièges du haut
+    const enHaut = sv.pos.y < this.geo.cy - this.geo.ry * 0.6;
+    sp.position.set(sv.pos.x, sv.pos.y + (enHaut ? this.geo.avatar * 0.95 : -this.geo.avatar * 0.95));
+    this.coucheEffets.addChild(sp);
+    jouerSon('clic');
+    await this.anim.tween(sp.scale, { x: base, y: base }, 320, { ease: EASE.rebond });
+    await this.anim.tween(sp, { y: sp.y - 8 }, 500, { ease: EASE.entreeSortie });
+    await this.anim.tween(sp, { y: sp.y + 8 }, 500, { ease: EASE.entreeSortie });
+    await this.anim.attendre(700);
+    await this.anim.tween(sp, { alpha: 0 }, 350);
+    sp.destroy();
   }
 
   /** Termine les animations en cours (file trop longue, onglet revenu au premier plan). */

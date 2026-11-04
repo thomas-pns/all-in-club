@@ -208,6 +208,8 @@ export class Salle {
   private statsPartie = new Map<string, { gains: number; sansAbattage: number; plusGrosPot: number; meilleure: number; meilleureTexte: string }>();
   private enPause = false;
   private historique: EnregistrementMain[] = [];
+  /** Joueurs partis pendant une main : leur siège reste affiché jusqu'à la fin de la main. */
+  private partis = new Map<string, Membre>();
   private chat: MessageChat[] = [];
   private antiSpam = new Map<string, { messages: number[]; emote: number }>();
   /** Plus petit tapis atteint pendant la partie (pour le succès « Le retour »). */
@@ -314,6 +316,7 @@ export class Salle {
   partir(id: string): void {
     if (this.spectateurs.delete(id)) { this.diffuser(); return; }
     if (!this.humains.has(id)) return;
+    this.partis.set(id, this.humains.get(id)!.membre);
     this.humains.delete(id);
     this.table.quitter(id);
     if (this.hote === id) this.changerHote();
@@ -413,6 +416,7 @@ export class Salle {
       case 'lever': {
         const h = this.humains.get(id);
         if (!h) return;
+        this.partis.set(id, h.membre);
         this.humains.delete(id);
         this.table.quitter(id);
         this.spectateurs.set(id, { membre: h.membre, connecte: h.connecte });
@@ -812,7 +816,7 @@ export class Salle {
   /* ----------------------------- Vues ----------------------------- */
 
   private membre(id: string): Membre | undefined {
-    return this.humains.get(id)?.membre ?? this.bots.get(id)?.membre ?? this.spectateurs.get(id)?.membre;
+    return this.humains.get(id)?.membre ?? this.bots.get(id)?.membre ?? this.spectateurs.get(id)?.membre ?? this.partis.get(id);
   }
 
   private annoncer(texte: string) {

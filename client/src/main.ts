@@ -14,9 +14,10 @@ import type { AvatarId } from '../../moteur/avatars';
 import { estAvatar } from '../../moteur/avatars';
 import type { Utilisateur } from '../../serveur/comptes';
 import type { MessageServeur } from '../../serveur/hall';
+import type { EnregistrementMain } from '../../moteur/analyse';
 import { Reseau, api, ErreurApi, jetonEnregistre, enregistrerJeton } from './reseau';
 import { EcranTable, Canal } from './ui/table';
-import { ecranConnexion, ecranReinitialiser, EcranHall, ecranCreation, ecranProfil } from './ui/ecrans';
+import { ecranConnexion, ecranReinitialiser, EcranHall, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces } from './ui/ecrans';
 import { toast, html } from './ui/commun';
 import { debloquerSon } from './vue/son';
 
@@ -71,6 +72,7 @@ function connecte(u: Utilisateur, jeton: string) {
 function surMessage(m: MessageServeur) {
   switch (m.type) {
     case 'hall': hall?.majTables(m.tables, m.enLigne); break;
+    case 'succes': annoncerSucces(m.succes); break;
     case 'entre': allerTableEnLigne(); break;
     case 'sorti': if (m.raison) toast(m.raison, true); if (table) { fermerTable(); allerHall(); } break;
     case 'erreur':
@@ -98,6 +100,7 @@ function allerHall() {
     regarder: (id) => r.envoyer({ type: 'regarder', id }),
     solo: () => allerSolo(),
     profil: () => allerProfil(),
+    joueurs: () => allerJoueurs(),
   });
   r.envoyer({ type: 'hall' });
 }
@@ -112,14 +115,19 @@ function allerCreation() {
   });
 }
 
-function allerProfil() {
+function allerProfil(pseudo?: string, retour: () => void = allerHall) {
   hall = null;
   if (!utilisateur) return;
-  ecranProfil(app, utilisateur, {
-    onRetour: () => allerHall(),
+  void ecranProfilJoueur(app, pseudo ?? utilisateur.pseudo, utilisateur, {
+    onRetour: retour,
     onMaj: (u) => { utilisateur = u; },
     onDeconnexion: () => deconnexion(),
   });
+}
+
+function allerJoueurs() {
+  hall = null;
+  void ecranJoueurs(app, { onRetour: () => allerHall(), onProfil: (p) => allerProfil(p, allerJoueurs) });
 }
 
 async function deconnexion() {
@@ -147,7 +155,10 @@ function allerTableEnLigne() {
     quitter: () => { r.envoyer({ type: 'quitter' }); stop(); },
     brancher: (f) => { ecouteurs.add(f); return () => { ecouteurs.delete(f); }; },
   };
-  table = new EcranTable(app, canal, () => { stop(); table = null; allerHall(); });
+  table = new EcranTable(app, canal, () => { stop(); table = null; allerHall(); }, {
+    dos: utilisateur?.dos,
+    mesMains: () => api<{ mains: { main: EnregistrementMain }[] }>('/api/mes-mains').then((r) => r.mains.map((x) => x.main).reverse()),
+  });
 }
 
 /* ------------------------------ Solo ------------------------------ */
