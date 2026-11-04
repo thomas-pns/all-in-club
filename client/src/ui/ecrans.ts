@@ -222,7 +222,7 @@ export function ecranCreation(racine: HTMLElement, opts: { solo: boolean; nomPar
       recaves: rc === 'interdites' || rc === 'illimitees' ? rc : Number(rc),
       bots: Math.min(Number(valeurs.bots), places - 1),
       niveauBots: valeurs.niveauBots as ReglagesSalle['niveauBots'],
-      fin, tempsReflexion: Number(valeurs.tempsReflexion),
+      fin, tempsReflexion: Number(valeurs.tempsReflexion), filtreInsultes: true,
     });
   };
 }

@@ -196,3 +196,58 @@ describe('Salle', () => {
     expect(derniereVue('thomas').monSiege).toBe(avant);
   });
 });
+
+describe('Salle : chat, émotes, historique, sauvegarde', () => {
+  it('chat filtré, anti-spam, émotes, historique des mains', () => {
+    const { salle, horloge, boite } = creer({ bots: 1, tempsReflexion: 0 });
+    salle.rejoindre({ id: 'leo', nom: 'Léo', avatar: 'ours' });
+    salle.commande('thomas', { c: 'chat', texte: 'salut espèce de connard' });
+    const recu = boite.get('leo')!.filter((m) => m.type === 'chat');
+    expect(recu).toHaveLength(1);
+    expect((recu[0] as any).message.texte).toBe('salut espèce de c★★★★★★');
+    salle.commande('thomas', { c: 'chat', texte: 'encore' }); // trop vite
+    expect(boite.get('thomas')!.at(-1)).toMatchObject({ type: 'erreur' });
+    salle.commande('leo', { c: 'emote', id: 'requin' });
+    expect(boite.get('thomas')!.some((m) => m.type === 'emote' && m.id === 'requin')).toBe(true);
+    salle.commande('thomas', { c: 'lancer' });
+    for (let i = 0; i < 200 && salle.table.numeroMain < 3; i++) {
+      horloge.avancer(500);
+      for (const id of ['thomas', 'leo']) {
+        const l = boite.get(id)!.filter((m) => m.type === 'maj');
+        const e = (l.at(-1) as any)?.etat;
+        if (e?.legales) salle.commande(id, { c: 'action', action: { type: e.legales.peutParler ? 'parole' : 'suivre' } });
+      }
+    }
+    salle.commande('leo', { c: 'historique' });
+    const h = boite.get('leo')!.find((m) => m.type === 'historique') as any;
+    expect(h.mains.length).toBeGreaterThanOrEqual(2);
+    for (const main of h.mains) for (const j of main.joueurs) {
+      const montre = main.evenements.some((e: any) => e.t === 'abattage' && e.siege === j.siege);
+      if (j.id !== 'leo' && !montre) expect(j.cartes).toBeNull();
+    }
+  });
+
+  it('sauvegarde et restauration : mêmes tapis, partie en pause, joueurs déconnectés', () => {
+    const { salle, horloge } = creer({ bots: 2, tempsReflexion: 0, recaves: 'illimitees' });
+    salle.commande('thomas', { c: 'lancer' });
+    for (let i = 0; i < 40; i++) {
+      horloge.avancer(500);
+      const m = salle.table.main;
+      if (m && m.phase !== 'terminee' && m.aParler !== null && salle.table.sieges[m.aParler]!.id === 'thomas') salle.commande('thomas', { c: 'action', action: { type: 'coucher' } });
+    }
+    const s = JSON.parse(JSON.stringify(salle.exporter()));
+    const total = s.joueurs.reduce((a: number, j: any) => a + j.tapis, 0) + 0;
+    salle.arreter();
+    const boite2: any[] = [];
+    const r = new Salle({ id: s.id, code: s.code, hote: s.joueurs[0].membre, reglages: s.reglages, sauvegarde: s, sortie: { envoyer: (_i, m) => boite2.push(m) } });
+    expect(r.statut).toBe('pause');
+    expect(r.table.joueurs).toHaveLength(3);
+    expect(r.table.joueurs.reduce((a, p) => a + p.tapis, 0)).toBe(total);
+    expect(total).toBe(3000);
+    expect(r.hote).toBe('thomas');
+    r.connexion('thomas', true);
+    r.commande('thomas', { c: 'reprendre' });
+    expect(r.statut).toBe('en_jeu');
+    r.arreter();
+  });
+});

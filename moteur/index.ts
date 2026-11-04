@@ -8,3 +8,4 @@ export * from './rythme.js';
 export * from './salle.js';
 export * from './analyse.js';
 export * from './succes.js';
+export * from './social.js';

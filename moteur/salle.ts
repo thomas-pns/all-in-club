@@ -10,6 +10,8 @@ import { Niveau, Observateur, ProfilBot, deciderBot } from './bots.js';
 import { AVATARS, AvatarId } from './avatars.js';
 import { RYTHME, dureeAnimation } from './rythme.js';
 import { evaluer } from './evaluation.js';
+import { EnregistrementMain, enregistrerMain, filtrerEnregistrement } from './analyse.js';
+import { EMOTES, filtrerTexte } from './social.js';
 
 /* ------------------------------------------------------------------ */
 /* Types partagés avec le client                                        */
@@ -28,14 +30,15 @@ export interface ReglagesSalle {
   niveauBots: Niveau;
   fin: FinAuto;
   tempsReflexion: number;   // secondes, 0 = illimité (solo)
+  filtreInsultes: boolean;
 }
 
 export const REGLAGES_DEFAUT: Omit<ReglagesSalle, 'nom'> = {
   visibilite: 'publique', tapisDepart: 1000, pb: 10, gb: 20, places: 6, recaves: 2,
-  bots: 0, niveauBots: 'moyen', fin: { type: 'dernier' }, tempsReflexion: 20,
+  bots: 0, niveauBots: 'moyen', fin: { type: 'dernier' }, tempsReflexion: 20, filtreInsultes: true,
 };
 
-export interface Membre { id: string; nom: string; avatar: AvatarId }
+export interface Membre { id: string; nom: string; avatar: AvatarId; cadre?: string }
 
 export type Statut = 'attente' | 'en_jeu' | 'pause' | 'terminee';
 
@@ -59,10 +62,12 @@ export interface VueSiege {
   main: string | null;     // description de la main montrée
   recue: number;
   recavesRestantes: number;
+  cadre: string;
 }
 
 export interface Resultats {
-  classement: { id: string; nom: string; avatar: AvatarId; bot: boolean; bilan: number; recue: number; tapis: number }[];
+  classement: { id: string; nom: string; avatar: AvatarId; bot: boolean; bilan: number; recue: number; tapis: number; comeback: boolean }[];
+  tapisDepart: number;
   distinctions: { titre: string; id: string; detail: string }[];
   mains: number;
   plusGrosPot: { id: string; montant: number } | null;
@@ -116,18 +121,31 @@ export type CommandeClient =
   | { c: 'exclure'; id: string }
   | { c: 'accorderRecave'; id: string }
   | { c: 'terminer' }
-  | { c: 'rejouer' };
+  | { c: 'rejouer' }
+  | { c: 'chat'; texte: string }
+  | { c: 'emote'; id: string }
+  | { c: 'historique' };
 
 export type MessageSalle =
   | { type: 'maj'; evenements: EvenementPublic[]; etat: VueSalle }
   | { type: 'info'; texte: string }
   | { type: 'erreur'; texte: string }
-  | { type: 'exclu' };
+  | { type: 'exclu' }
+  | { type: 'chat'; message: MessageChat }
+  | { type: 'chatHistorique'; messages: MessageChat[] }
+  | { type: 'emote'; siege: number | null; de: string; id: string }
+  | { type: 'historique'; mains: EnregistrementMain[] };
+
+export interface MessageChat { de: string; nom: string; avatar: AvatarId; texte: string; t: number; systeme?: boolean }
 
 export interface Sortie {
   envoyer(id: string, msg: MessageSalle): void;
   /** Main terminée : pour l'historique et les statistiques. */
-  mainTerminee?(main: EtatMain, table: Table, salle: Salle): void;
+  mainTerminee?(main: EtatMain, table: Table, salle: Salle, enregistrement: EnregistrementMain): void;
+  /** Un humain a écrit dans le chat ou envoyé une émote (statistiques). */
+  activite?(id: string, type: 'message' | 'emote'): void;
+  /** L'état de la salle a changé (pour la sauvegarde). */
+  modifiee?(salle: Salle): void;
   partieTerminee?(r: Resultats, salle: Salle): void;
   /** Plus aucun humain dans la salle. */
   vide?(salle: Salle): void;
@@ -145,6 +163,16 @@ export const horlogeSysteme: Horloge = {
 };
 
 export class ErreurSalle extends Error {}
+
+export interface SauvegardeSalle {
+  version: 1;
+  id: string; code: string; reglages: ReglagesSalle; statut: Statut; hote: string;
+  debut: number | null; numeroMain: number; bouton: number; compteurBots: number;
+  joueurs: { membre: Membre; bot: boolean; profil?: ProfilBot; siege: number; tapis: number; recue: number; recavesUtilisees: number; absent: boolean; attendGB: boolean; arrivee: number; banque: number }[];
+  statsPartie: [string, { gains: number; sansAbattage: number; plusGrosPot: number; meilleure: number; meilleureTexte: string }][];
+  minTapis: [string, number][];
+  chat: MessageChat[];
+}
 
 const BANQUE_DEPART = 30, BANQUE_MAX = 60, BANQUE_RECHARGE = 5;
 
@@ -179,10 +207,16 @@ export class Salle {
   private resultats: Resultats | null = null;
   private statsPartie = new Map<string, { gains: number; sansAbattage: number; plusGrosPot: number; meilleure: number; meilleureTexte: string }>();
   private enPause = false;
+  private historique: EnregistrementMain[] = [];
+  private chat: MessageChat[] = [];
+  private antiSpam = new Map<string, { messages: number[]; emote: number }>();
+  /** Plus petit tapis atteint pendant la partie (pour le succès « Le retour »). */
+  private minTapis = new Map<string, number>();
+  derniereActivite = Date.now();
 
   constructor(opts: {
     id: string; code: string; hote: Membre; reglages: ReglagesSalle; sortie: Sortie;
-    horloge?: Horloge; alea?: () => number; rng?: Rng;
+    horloge?: Horloge; alea?: () => number; rng?: Rng; sauvegarde?: SauvegardeSalle;
   }) {
     this.id = opts.id;
     this.code = opts.code;
@@ -193,9 +227,59 @@ export class Salle {
     this.rng = opts.rng ?? ((n) => Math.floor(this.alea() * n));
     this.table = new Table(this.reglages);
     this.hote = opts.hote.id;
+    if (opts.sauvegarde) { this.restaurer(opts.sauvegarde); return; }
     this.rejoindre(opts.hote);
     for (let i = 0; i < this.reglages.bots; i++) this.ajouterBot(this.reglages.niveauBots);
   }
+
+  /* ----------------------------- Sauvegarde ----------------------------- */
+
+  /** État de la salle entre deux mains (une main en cours repart de son début). */
+  exporter(): SauvegardeSalle {
+    const m = this.table.main && this.table.main.phase !== 'terminee' ? this.table.main : null;
+    return {
+      version: 1,
+      id: this.id, code: this.code, reglages: { ...this.reglages }, statut: this.statut, hote: this.hote,
+      debut: this.debut, numeroMain: this.table.numeroMain, bouton: this.table.bouton, compteurBots: this.compteurBots,
+      joueurs: this.table.joueurs.map((p) => {
+        const enMain = m?.joueurs.find((x) => x.siege === p.siege);
+        const h = this.humains.get(p.id), b = this.bots.get(p.id);
+        return {
+          membre: (h?.membre ?? b?.membre)!, bot: !!b, profil: b?.profil, siege: p.siege,
+          tapis: enMain ? enMain.tapisDepart : p.tapis, recue: p.recue, recavesUtilisees: p.recavesUtilisees,
+          absent: p.absent, attendGB: p.attendGB, arrivee: h?.arrivee ?? 0, banque: h?.banque ?? BANQUE_DEPART,
+        };
+      }),
+      statsPartie: [...this.statsPartie.entries()],
+      minTapis: [...this.minTapis.entries()],
+      chat: this.chat.slice(-30),
+    };
+  }
+
+  private restaurer(s: SauvegardeSalle) {
+    this.compteurBots = s.compteurBots;
+    this.debut = s.debut;
+    for (const j of s.joueurs) {
+      const p = this.table.asseoir(j.membre.id, j.membre.nom, { siege: j.siege, bot: j.bot });
+      Object.assign(p, { tapis: j.tapis, recue: j.recue, recavesUtilisees: j.recavesUtilisees, absent: j.absent, attendGB: j.attendGB, aJoue: true });
+      if (j.bot) this.bots.set(j.membre.id, { membre: j.membre, profil: j.profil!, humeur: 0 });
+      else {
+        this.humains.set(j.membre.id, { membre: j.membre, connecte: false, arrivee: j.arrivee, banque: j.banque, tempsEcoules: 0 });
+        this.compteurArrivee = Math.max(this.compteurArrivee, j.arrivee + 1);
+      }
+    }
+    this.table.numeroMain = s.numeroMain;
+    this.table.bouton = s.bouton;
+    this.statsPartie = new Map(s.statsPartie);
+    this.minTapis = new Map(s.minTapis);
+    this.chat = s.chat ?? [];
+    // Après un redémarrage, la partie attend que l'hôte la relance
+    this.statut = s.statut === 'en_jeu' ? 'pause' : s.statut;
+    if (this.statut === 'terminee') this.resultats = this.calculerResultats();
+    if (!this.humains.has(this.hote)) this.changerHote();
+  }
+
+  get nbConnectes(): number { return [...this.humains.values()].filter((h) => h.connecte).length + [...this.spectateurs.values()].filter((s) => s.connecte).length; }
 
   /* ----------------------------- Membres ----------------------------- */
 
@@ -205,6 +289,8 @@ export class Salle {
 
   /** Rejoindre : s'asseoir s'il reste une place, sinon regarder. */
   rejoindre(m: Membre): void {
+    this.derniereActivite = Date.now();
+    this.envoyerChatHistorique(m.id);
     const dejaAssis = this.humains.get(m.id);
     if (dejaAssis) { dejaAssis.connecte = true; dejaAssis.membre = m; this.diffuser(); return; }
     if (this.table.siegesLibres().length) this.asseoirHumain(m);
@@ -214,6 +300,7 @@ export class Salle {
 
   regarder(m: Membre): void {
     if (this.humains.has(m.id)) return this.rejoindre(m);
+    this.envoyerChatHistorique(m.id);
     this.spectateurs.set(m.id, { membre: m, connecte: true });
     this.diffuser();
   }
@@ -242,6 +329,8 @@ export class Salle {
   }
 
   connexion(id: string, connecte: boolean): void {
+    this.derniereActivite = Date.now();
+    if (connecte) this.envoyerChatHistorique(id);
     const h = this.humains.get(id);
     if (h) h.connecte = connecte;
     const s = this.spectateurs.get(id);
@@ -396,6 +485,13 @@ export class Salle {
         if (this.table.mainEnCours()) { this.finDemandee = true; this.annoncer('La partie se termine après cette main'); }
         else this.terminer();
         break;
+      case 'chat': return this.ecrire(id, cmd.texte);
+      case 'emote': return this.emote(id, cmd.id);
+      case 'historique': {
+        const pour = this.historique.filter((h) => h.joueurs.some((j) => j.id === id) || this.spectateurs.has(id) || this.humains.has(id));
+        this.sortie.envoyer(id, { type: 'historique', mains: pour.map((h) => filtrerEnregistrement(h, id)) });
+        return;
+      }
       case 'rejouer':
         this.exigerHote(id);
         if (this.table.mainEnCours()) throw new ErreurSalle('Attendre la fin de la main');
@@ -433,6 +529,7 @@ export class Salle {
     if (m) this.collecterEvenements(m);
     this.diffuser();
     this.planifier();
+    if (!this.table.mainEnCours()) this.sortie.modifiee?.(this);
   }
 
   private collecterEvenements(m: EtatMain) {
@@ -539,7 +636,19 @@ export class Salle {
       const st = this.statPartie(id);
       if (v.score > st.meilleure) { st.meilleure = v.score; st.meilleureTexte = v.main; }
     }
-    this.sortie.mainTerminee?.(m, this.table, this);
+    const rec = enregistrerMain(m, {
+      table: this.reglages.nom, numero: this.table.numeroMain, places: this.reglages.places,
+      membre: (id) => { const mb = this.membre(id); return { nom: mb?.nom ?? '?', avatar: mb?.avatar ?? 'renard' }; },
+    });
+    this.historique.push(rec);
+    if (this.historique.length > 50) this.historique.shift();
+    for (const p of m.joueurs) {
+      const ratio = p.tapis / Math.max(1, this.reglages.tapisDepart);
+      this.minTapis.set(p.id, Math.min(this.minTapis.get(p.id) ?? Infinity, ratio));
+    }
+    this.emotesDesBots(m);
+    this.sortie.mainTerminee?.(m, this.table, this, rec);
+    this.sortie.modifiee?.(this);
   }
 
   private statPartie(id: string) {
@@ -582,13 +691,14 @@ export class Salle {
     this.statut = 'terminee';
     this.resultats = this.calculerResultats();
     this.sortie.partieTerminee?.(this.resultats, this);
+    this.sortie.modifiee?.(this);
     this.diffuser();
   }
 
   private calculerResultats(): Resultats {
     const classement = this.table.joueurs.map((p) => {
       const m = this.membre(p.id)!;
-      return { id: p.id, nom: p.nom, avatar: m.avatar, bot: p.bot, bilan: p.tapis - p.recue, recue: p.recue, tapis: p.tapis };
+      return { id: p.id, nom: p.nom, avatar: m.avatar, bot: p.bot, bilan: p.tapis - p.recue, recue: p.recue, tapis: p.tapis, comeback: (this.minTapis.get(p.id) ?? 1) < 0.1 };
     }).sort((a, b) => b.bilan - a.bilan || b.tapis - a.tapis);
     const distinctions: Resultats['distinctions'] = [];
     let plusGrosPot: Resultats['plusGrosPot'] = null, meilleureMain: Resultats['meilleureMain'] = null;
@@ -606,11 +716,12 @@ export class Salle {
     }
     if (bluffeur && bluffeur.n >= 2) distinctions.push({ titre: 'Le bluffeur', id: bluffeur.id, detail: `${bluffeur.n} pots gagnés sans montrer` });
     if (meilleureMain) distinctions.push({ titre: 'La plus belle main', id: meilleureMain.id, detail: meilleureMain.main });
-    return { classement, distinctions, mains: this.table.numeroMain, plusGrosPot, meilleureMain };
+    return { classement, distinctions, mains: this.table.numeroMain, plusGrosPot, meilleureMain, tapisDepart: this.reglages.tapisDepart };
   }
 
   private rejouer() {
     this.table.rejouer();
+    this.minTapis.clear();
     for (const b of [...this.bots.keys()]) if (!this.table.joueur(b)) this.bots.delete(b);
     this.statsPartie.clear();
     this.resultats = null;
@@ -624,6 +735,71 @@ export class Salle {
   }
 
   arreter() { this.annulerMinuterie(); }
+
+  /* ----------------------------- Chat et émotes ----------------------------- */
+
+  private envoyerChatHistorique(id: string) {
+    if (this.chat.length) this.sortie.envoyer(id, { type: 'chatHistorique', messages: this.chat.slice(-30) });
+  }
+
+  private limite(id: string, type: 'message' | 'emote'): boolean {
+    const t = this.horloge.maintenant();
+    let a = this.antiSpam.get(id);
+    if (!a) { a = { messages: [], emote: -Infinity }; this.antiSpam.set(id, a); }
+    if (type === 'emote') {
+      if (t - a.emote < 3000) return false;
+      a.emote = t;
+      return true;
+    }
+    a.messages = a.messages.filter((x) => t - x < 10_000);
+    if (a.messages.length >= 5 || (a.messages.length && t - a.messages[a.messages.length - 1] < 1000)) return false;
+    a.messages.push(t);
+    return true;
+  }
+
+  private ecrire(id: string, texte: string) {
+    const m = this.humains.get(id)?.membre ?? this.spectateurs.get(id)?.membre;
+    if (!m) throw new ErreurSalle("Tu n'es pas à cette table");
+    let propre = String(texte ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!propre) return;
+    if (!this.limite(id, 'message')) throw new ErreurSalle('Doucement ! Un message par seconde au maximum');
+    if (this.reglages.filtreInsultes) propre = filtrerTexte(propre);
+    const msg: MessageChat = { de: id, nom: m.nom, avatar: m.avatar, texte: propre, t: this.horloge.maintenant() };
+    this.chat.push(msg);
+    if (this.chat.length > 100) this.chat.shift();
+    for (const d of this.destinataires()) this.sortie.envoyer(d, { type: 'chat', message: msg });
+    this.sortie.activite?.(id, 'message');
+  }
+
+  private emote(id: string, emote: string) {
+    if (!EMOTES.some((e) => e.id === emote)) throw new ErreurSalle('Émote inconnue');
+    const p = this.table.joueur(id);
+    if (!p && !this.spectateurs.has(id)) throw new ErreurSalle("Tu n'es pas à cette table");
+    if (!this.limite(id, 'emote')) return;
+    this.diffuserEmote(p ? p.siege : null, id, emote);
+    if (this.humains.has(id)) this.sortie.activite?.(id, 'emote');
+  }
+
+  private diffuserEmote(siege: number | null, de: string, emote: string) {
+    for (const d of this.destinataires()) this.sortie.envoyer(d, { type: 'emote', siege, de, id: emote });
+  }
+
+  /** De temps en temps, les bots réagissent à la fin d'une main. */
+  private emotesDesBots(m: EtatMain) {
+    const r = m.resultat;
+    if (!r) return;
+    const animation = Math.max(0, this.occupeJusqua - this.horloge.maintenant());
+    for (const p of m.joueurs) {
+      const b = this.bots.get(p.id);
+      if (!b || this.alea() > 0.18) continue;
+      const gagne = (r.gains[p.siege] ?? 0) > 0;
+      const perdu = !gagne && !p.couche && !r.sansAbattage;
+      const choix = gagne ? (r.sansAbattage ? ['lunettes', 'rire'] : ['champagne', 'applaudir', 'rire', 'requin']) : perdu ? ['larme', 'colere', 'bienjoue'] : [];
+      if (!choix.length) continue;
+      const e = choix[Math.floor(this.alea() * choix.length)];
+      this.horloge.planifier(() => { if (this.table.joueur(p.id)) this.diffuserEmote(p.siege, p.id, e); }, animation + 300 + this.alea() * 1200);
+    }
+  }
 
   private programmer(fn: () => void, ms: number) {
     this.annulerMinuterie();
@@ -689,7 +865,7 @@ export class Salle {
         dansLaMain: !!mj, couche: !!mj?.couche, aTapis: !!mj?.aTapis && mj.tapis === 0,
         absent: p.absent, deconnecte: !!h && !h.connecte, attendGB: p.attendGB,
         cartes: visible, aDesCartes: !!mj && !mj.couche, main: montree?.main ?? null,
-        recue: p.recue, recavesRestantes: Math.min(99, t.recavesRestantes(p)),
+        recue: p.recue, recavesRestantes: Math.min(99, t.recavesRestantes(p)), cadre: membre.cadre ?? 'aucun',
       };
     });
     const monJoueur = t.joueur(id);
@@ -757,6 +933,7 @@ export function valider(r: ReglagesSalle): ReglagesSalle {
     niveauBots: (['facile', 'moyen', 'difficile'] as const).includes(r.niveauBots) ? r.niveauBots : 'moyen',
     fin: r.fin?.type === 'duree' ? { type: 'duree', minutes: ent(r.fin.minutes, 5, 600, 60) } : r.fin?.type === 'jamais' ? { type: 'jamais' } : { type: 'dernier' },
     tempsReflexion: [0, 10, 20, 30].includes(Number(r.tempsReflexion)) ? Number(r.tempsReflexion) : 20,
+    filtreInsultes: r.filtreInsultes !== false,
   };
   out.gb = ent(r.gb, out.pb * 2, out.pb * 2, out.pb * 2);
   out.bots = Math.min(out.bots, out.places - 1);
