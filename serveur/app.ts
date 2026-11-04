@@ -13,6 +13,7 @@ import { Courriel } from './courriel.js';
 import { AVATARS } from '../moteur/avatars.js';
 import { listeSucces, CADRES, DOS } from '../moteur/succes.js';
 import { Donnees } from './donnees.js';
+import { Notifications } from './notifications.js';
 
 export const VERSION = '0.2.0';
 
@@ -43,7 +44,8 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   const app = Fastify({ logger: o.journal ? { level: 'info', redact: ['req.headers.authorization'] } : false, trustProxy: true, bodyLimit: 32 * 1024 });
   const comptes = new Comptes(o.db);
   const donnees = new Donnees(o.db);
-  const hall = new Hall(donnees);
+  const notifications = new Notifications(o.db, o.urlPublique ?? 'mailto:admin@all-in-club.invalid');
+  const hall = new Hall(donnees, notifications);
   hall.restaurer();
   const limiteAuth = limiteur(10, 5 * 60_000);
   const limiteMail = limiteur(3, 15 * 60_000);
@@ -92,6 +94,20 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   });
 
   app.get('/api/mes-mains', async (req) => ({ mains: donnees.mesMains(exigerUtilisateur(req).id) }));
+
+  app.get('/api/push/cle', async () => ({ cle: notifications.clePublique }));
+
+  app.post('/api/push/abonnement', async (req) => {
+    const u = exigerUtilisateur(req);
+    try { notifications.abonner(u.id, (req.body as any)?.abonnement); } catch (e) { throw new ErreurCompte((e as Error).message); }
+    return { ok: true };
+  });
+
+  app.delete('/api/push/abonnement', async (req) => {
+    const u = exigerUtilisateur(req);
+    notifications.desabonner(u.id, (req.body as any)?.endpoint);
+    return { ok: true };
+  });
 
   app.get('/api/moi/recompenses', async (req) => donnees.recompenses(exigerUtilisateur(req).id));
 

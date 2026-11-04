@@ -345,6 +345,21 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 3px; }
 .annonce-succes span { font-size: 13px; font-weight: 700; }
 @keyframes succes { from { transform: translate(-50%, -40px) scale(.6); opacity: 0; } }
 
+/* ---------- Volumes ---------- */
+.reglage-volume { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 12px; background: var(--nuit2); border: 3px solid var(--trait); border-radius: 16px; padding: 8px 14px 6px; margin-bottom: 8px; font-family: Fredoka; font-weight: 600; font-size: 17px; }
+.reglage-volume .glissiere { grid-column: 1 / -1; }
+.reglage-volume b { font-family: Fredoka; color: var(--or); text-align: right; }
+.interrupteur { display: flex; align-items: center; gap: 14px; background: var(--nuit2); border: 3px solid var(--trait); border-radius: 16px; padding: 10px 14px; margin-bottom: 8px; cursor: pointer; }
+.interrupteur .txt { flex: 1; min-width: 0; }
+.interrupteur b { font-family: Fredoka; font-weight: 600; font-size: 17px; display: block; }
+.interrupteur small { color: var(--doux); font-size: 13px; font-weight: 600; display: block; line-height: 1.3; }
+.interrupteur input { position: absolute; opacity: 0; pointer-events: none; }
+.curseur-switch { flex: none; width: 56px; height: 32px; border-radius: 99px; background: #241b3e; border: 3px solid var(--trait); position: relative; box-shadow: inset 0 3px 4px rgba(0,0,0,.4); transition: background .18s; }
+.curseur-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--creme); border: 2.5px solid var(--trait); transition: transform .18s cubic-bezier(.3,1.4,.5,1); }
+.interrupteur input:checked + .curseur-switch { background: linear-gradient(#FFD25E, #F2A516); }
+.interrupteur input:checked + .curseur-switch::after { transform: translateX(24px); }
+.interrupteur input:focus-visible + .curseur-switch { outline: 3px solid var(--or); outline-offset: 2px; }
+
 /* ---------- Listes déroulantes du jeu ---------- */
 select.select-cache { position: absolute !important; opacity: 0; pointer-events: none; width: 1px !important; height: 1px; padding: 0; border: 0; }
 .liste-jeu {
@@ -368,3 +383,36 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 }
 .menu-liste button:hover { background: #45386B; }
 .menu-liste button.on { background: linear-gradient(#FFD25E, #F2A516); color: var(--trait); }
+
+/* ---------- Mon personnage dans le hall ---------- */
+.hall-grille { display: grid; grid-template-columns: 270px 1fr; gap: 22px; align-items: start; }
+.carte-moi {
+  background: linear-gradient(#3a2e60, #2b2148); border: 3px solid var(--trait); border-radius: 24px; padding: 18px; text-align: center;
+  box-shadow: 0 6px 0 rgba(0,0,0,.3); position: sticky; top: 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.carte-moi h2 { font-size: 24px; }
+.avatar-vivant { position: relative; width: 150px; height: 150px; animation: respire 3.6s ease-in-out infinite; transform-origin: 50% 90%; }
+.avatar-vivant svg { width: 150px; height: 150px; display: block; }
+.avatar-vivant .clin { position: absolute; inset: 0; opacity: 0; transition: opacity .04s; }
+@keyframes respire { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, 1.03) translateY(-2px); } }
+.mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; }
+.mini-stats div { background: var(--nuit3); border-radius: 12px; padding: 6px 4px; }
+.mini-stats b { display: block; font-family: Fredoka; font-size: 18px; color: var(--or); }
+.mini-stats b.plus { color: #7EE2A4; } .mini-stats b.moins { color: #FFB1A8; }
+.mini-stats span { font-size: 11.5px; color: var(--doux); font-weight: 800; }
+.derniers-succes { width: 100%; text-align: left; }
+.succes-mini { display: flex; align-items: center; gap: 8px; background: var(--nuit3); border-radius: 12px; padding: 5px 8px; margin-bottom: 5px; font-weight: 800; font-size: 13.5px; }
+.succes-mini span { font-size: 20px; }
+@media (max-width: 760px) {
+  .hall-grille { grid-template-columns: 1fr; }
+  .carte-moi { position: static; display: grid; grid-template-columns: 96px 1fr; text-align: left; align-items: center; gap: 4px 14px; }
+  .carte-moi .avatar-vivant, .carte-moi .avatar-vivant svg { width: 96px; height: 96px; }
+  .carte-moi .avatar-vivant { grid-row: span 2; }
+  .carte-moi .derniers-succes, .carte-moi [data-profil-moi] { grid-column: 1 / -1; }
+  .carte-moi .derniers-succes .succes-mini:nth-child(n+3) { display: none; }
+}
+.profil-mini { display: none !important; }
+@media (max-width: 600px) {
+  .actions-hall { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .actions-hall .btn { font-size: 15.5px; padding: 12px 8px 13px; white-space: normal; }
+}

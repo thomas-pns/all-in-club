@@ -5,7 +5,7 @@
 import type { AvatarId } from '../../../moteur/avatars';
 import { cadreSVG } from './emotes';
 
-export type Expression = 'neutre' | 'concentre' | 'content' | 'ravi' | 'decu' | 'sueur';
+export type Expression = 'neutre' | 'concentre' | 'content' | 'ravi' | 'decu' | 'sueur' | 'cligne';
 export const EXPRESSIONS: Expression[] = ['neutre', 'concentre', 'content', 'ravi', 'decu', 'sueur'];
 
 const T = '#2A1E3F';
@@ -69,6 +69,10 @@ function yeux(v: Visage, ex: Expression): string {
       case 'decu':
         s += sclere(x) + `<ellipse cx="${x}" cy="${ey + 3}" rx="${v.sclere ? 5 : 6.5}" ry="${v.sclere ? 6 : 7.5}" fill="${oeil}"/>` + (reflet ? `<circle cx="${x + 2}" cy="${ey + 5.5}" r="2.2" fill="${reflet}"/>` : '');
         break;
+      case 'cligne':
+        // Yeux fermés le temps d'un clignement
+        s += `<path d="M${x - 9},${ey + 1} Q${x},${ey + 6} ${x + 9},${ey + 1}" stroke="${v.sclere ? '#FFF4DF' : oeil}" stroke-width="4.5" fill="none" stroke-linecap="round"/>`;
+        break;
       case 'sueur':
         s += (v.sclere ? sclere(x, 12) : `<ellipse cx="${x}" cy="${ey}" rx="10" ry="11" fill="#fff" stroke="${T}" stroke-width="3"/>`) + `<circle cx="${x}" cy="${ey + 1}" r="3.6" fill="${oeil}"/>`;
         break;
@@ -87,7 +91,8 @@ function bouche(v: Visage, ex: Expression): string {
     return bec;
   }
   switch (ex) {
-    case 'neutre': return `<path d="M88,${y} Q100,${y + 9} 112,${y}" stroke="${c}" stroke-width="4.5" fill="none" stroke-linecap="round"/>`;
+    case 'neutre':
+    case 'cligne': return `<path d="M88,${y} Q100,${y + 9} 112,${y}" stroke="${c}" stroke-width="4.5" fill="none" stroke-linecap="round"/>`;
     case 'concentre': return `<path d="M91,${y + 3} L110,${y + 1}" stroke="${c}" stroke-width="4.5" fill="none" stroke-linecap="round"/>`;
     case 'content': return `<path d="M84,${y - 2} Q100,${y + 15} 116,${y - 2}" stroke="${c}" stroke-width="5" fill="none" stroke-linecap="round"/>`;
     case 'ravi': return `<path d="M84,${y - 3} Q100,${y - 1} 116,${y - 3} Q114,${y + 19} 100,${y + 19} Q86,${y + 19} 84,${y - 3}Z" fill="${T}"/><path d="M91,${y + 12} Q100,${y + 6} 109,${y + 12} Q100,${y + 19} 91,${y + 12}Z" fill="#FF7E8A"/>`;
@@ -196,7 +201,7 @@ const PERSOS: Record<AvatarId, Perso> = {
       const y = 148;
       const m: Record<Expression, string> = {
         neutre: `M88,${y} L112,${y}`, concentre: `M90,${y} L110,${y}`, content: `M86,${y - 3} Q100,${y + 7} 114,${y - 3}`,
-        ravi: `M86,${y - 4} Q100,${y + 9} 114,${y - 4}`, decu: `M88,${y + 4} Q100,${y - 4} 112,${y + 4}`, sueur: `M86,${y} l6,-4 l6,4 l6,-4 l6,4`,
+        ravi: `M86,${y - 4} Q100,${y + 9} 114,${y - 4}`, decu: `M88,${y + 4} Q100,${y - 4} 112,${y + 4}`, sueur: `M86,${y} l6,-4 l6,4 l6,-4 l6,4`, cligne: `M88,${y} L112,${y}`,
       };
       return `<path d="${m[ex]}" stroke="#6FF2FF" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
     },

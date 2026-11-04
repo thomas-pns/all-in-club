@@ -19,7 +19,9 @@ import { Reseau, api, ErreurApi, jetonEnregistre, enregistrerJeton } from './res
 import { EcranTable, Canal } from './ui/table';
 import { ecranConnexion, ecranReinitialiser, EcranHall, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces } from './ui/ecrans';
 import { toast, html } from './ui/commun';
-import { debloquerSon } from './vue/son';
+import { debloquerSon, reglerSon } from './vue/son';
+import { volumeMusique } from './vue/musique';
+import { lirePrefs, suivrePrefs, definirNotifications, ecrirePrefs } from './ui/commun';
 
 const app = document.getElementById('app')!;
 let utilisateur: Utilisateur | null = null;
@@ -55,8 +57,35 @@ function allerConnexion() {
   ecranConnexion(app, { onConnecte: connecte, onSolo: () => allerSolo(), horsLigne });
 }
 
+/** Notifications « c'est ton tour » : abonnement Web Push auprès du serveur. */
+async function notifications(oui: boolean): Promise<boolean> {
+  const b64 = (s: string) => { const p = '='.repeat((4 - (s.length % 4)) % 4); const r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(r, (c) => c.charCodeAt(0)); };
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+      toast(/iPhone|iPad/.test(navigator.userAgent) ? "Sur iPhone : ajoute d'abord le jeu à l'écran d'accueil (Partager > Sur l'écran d'accueil), puis ouvre-le depuis l'icône" : 'Ton navigateur ne gère pas les notifications', true, 6000);
+      return false;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    if (!oui) {
+      const ab = await reg.pushManager.getSubscription();
+      if (ab) { await api('/api/push/abonnement', { endpoint: ab.endpoint }, 'DELETE').catch(() => {}); await ab.unsubscribe(); }
+      return false;
+    }
+    if ((await Notification.requestPermission()) !== 'granted') { toast('Notifications refusées : autorise-les dans les réglages du navigateur', true, 5000); return false; }
+    const { cle } = await api<{ cle: string }>('/api/push/cle');
+    const ab = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(cle) }));
+    await api('/api/push/abonnement', { abonnement: ab.toJSON() });
+    toast("C'est noté : tu seras prévenu quand c'est ton tour");
+    return true;
+  } catch (e) {
+    toast(e instanceof Error ? e.message : 'Notifications impossibles', true);
+    return false;
+  }
+}
+
 function connecte(u: Utilisateur, jeton: string) {
   utilisateur = u;
+  definirNotifications(notifications);
   horsLigne = false;
   reseau?.fermer();
   ecouteReseau?.();
@@ -134,6 +163,8 @@ async function deconnexion() {
   fermerTable();
   await api('/api/deconnexion', {}).catch(() => {});
   enregistrerJeton(null);
+  definirNotifications(null);
+  if (lirePrefs().notifications) { void notifications(false); ecrirePrefs({ notifications: false }); }
   reseau?.fermer(); reseau = null;
   ecouteReseau?.(); ecouteReseau = null;
   utilisateur = null;
@@ -197,5 +228,11 @@ function lancerSolo(reglages: ReglagesSalle) {
   table = new EcranTable(app, canal, () => { table = null; utilisateur ? allerHall() : allerConnexion(); });
   salle.commande(moi.id, { c: 'lancer' });
 }
+
+// Son : les navigateurs exigent un geste de l'utilisateur avant de jouer quoi que ce soit.
+const appliquerVolumes = () => { const p = lirePrefs(); reglerSon(p.effets > 0, p.effets); volumeMusique(p.musique); };
+document.addEventListener('pointerdown', () => { debloquerSon(); appliquerVolumes(); }, { capture: true });
+document.addEventListener('keydown', () => { debloquerSon(); appliquerVolumes(); }, { capture: true });
+suivrePrefs(() => appliquerVolumes());
 
 void demarrer();

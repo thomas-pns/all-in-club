@@ -53,6 +53,7 @@ export class Reseau {
   }
 
   private auRetour = () => {
+    this.envoyer({ type: 'visible', visible: document.visibilityState === 'visible' });
     if (document.visibilityState === 'visible' && !this.connecte && !this.arrete) {
       this.tentative = 0;
       if (this.minuterie) clearTimeout(this.minuterie);
@@ -68,6 +69,7 @@ export class Reseau {
     this.ws = ws;
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'auth', jeton: this.jeton }));
+      ws.send(JSON.stringify({ type: 'visible', visible: document.visibilityState === 'visible' }));
       if (this.ping) clearInterval(this.ping);
       this.ping = setInterval(() => this.envoyer({ type: 'ping' }), 25_000);
     };

@@ -7,6 +7,9 @@ let actif = true;
 
 export function reglerSon(on: boolean, vol = volume) { actif = on; volume = vol; }
 
+/** Le contexte audio partagé (effets et musique), créé au premier geste de l'utilisateur. */
+export function contexteAudio(): AudioContext | null { return ctx; }
+
 /** À appeler sur un geste de l'utilisateur (exigé par les navigateurs, surtout iOS). */
 export function debloquerSon() {
   try {

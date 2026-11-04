@@ -123,6 +123,13 @@ export class EcranHall {
     this.el = html(`<div class="ecran"><div class="centre">
       <div class="entete">${logoHTML('font-size:clamp(30px,6vw,44px)')}
         <button class="profil-mini" data-profil>${avatarSVG(u.avatar, 'content', 42, { cadre: u.cadre })}<span>${esc(u.pseudo)}</span></button></div>
+      <div class="hall-grille"><aside class="carte-moi" data-moi>
+        <div class="avatar-vivant">${avatarSVG(u.avatar, 'content', 150, { cadre: u.cadre })}<div class="clin">${avatarSVG(u.avatar, 'cligne', 150, { cadre: u.cadre })}</div></div>
+        <h2>${esc(u.pseudo)}</h2>
+        <div class="mini-stats" data-stats><span class="doux petit">…</span></div>
+        <div class="derniers-succes" data-succes></div>
+        <button class="btn btn-petit" data-profil-moi>Mon profil</button>
+      </aside><div>
       <div class="actions-hall">
         <button class="btn btn-or" data-a="creer">＋ Créer une table</button>
         <button class="btn btn-ciel" data-a="code">🔑 Rejoindre avec un code</button>
@@ -131,9 +138,20 @@ export class EcranHall {
       </div>
       <div class="ligne" style="justify-content:space-between;margin-bottom:12px"><h2>Tables ouvertes</h2><span class="doux petit" data-enligne></span></div>
       <div data-tables><div class="vide-liste">Chargement…</div></div>
-    </div></div>`);
+    </div></div></div></div>`);
     racine.replaceChildren(this.el);
     $('[data-profil]', this.el).onclick = () => a.profil();
+    $('[data-profil-moi]', this.el).onclick = () => a.profil();
+    // Clignement de l'avatar du hall
+    const clin = $('.clin', this.el);
+    const cligner = () => {
+      if (!this.el.isConnected) return;
+      clin.style.opacity = '1';
+      setTimeout(() => { clin.style.opacity = '0'; }, 140);
+      setTimeout(cligner, 2200 + Math.random() * 4200);
+    };
+    setTimeout(cligner, 1800);
+    void this.chargerMoi();
     $('[data-a="creer"]', this.el).onclick = () => a.creer();
     $('[data-a="solo"]', this.el).onclick = () => a.solo();
     $('[data-a="joueurs"]', this.el).onclick = () => a.joueurs();
@@ -145,6 +163,25 @@ export class EcranHall {
       ($('input', f) as HTMLInputElement).focus();
       f.onsubmit = (e) => { e.preventDefault(); a.rejoindreCode((f.code as HTMLInputElement).value.trim().toUpperCase()); p.fermer(); };
     };
+  }
+
+  private async chargerMoi() {
+    try {
+      const [p, d] = await Promise.all([
+        api<{ stats: Stats; succes: { id: string; date: number }[] }>(`/api/joueurs/${encodeURIComponent(this.u.pseudo)}`),
+        api<{ succes: DefSucces[] }>('/api/succes'),
+      ]);
+      const s = p.stats;
+      $('[data-stats]', this.el).innerHTML = `
+        <div><b>${fmt(s.mains)}</b><span>mains</span></div>
+        <div><b>${s.partiesGagnees}</b><span>victoires</span></div>
+        <div><b class="${s.bilanTapis >= 0 ? 'plus' : 'moins'}">${s.bilanTapis >= 0 ? '+' : ''}${s.bilanTapis.toLocaleString('fr-FR')}</b><span>tapis</span></div>`;
+      const derniers = p.succes.slice().sort((a, b) => b.date - a.date).slice(0, 3)
+        .map((x) => d.succes.find((y) => y.id === x.id)).filter(Boolean) as DefSucces[];
+      $('[data-succes]', this.el).innerHTML = derniers.length
+        ? `<div class="doux petit" style="margin-bottom:6px">Derniers succès · ${p.succes.length}/${d.succes.length}</div>${derniers.map((x) => `<div class="succes-mini"><span>${x.icone}</span>${esc(x.titre)}</div>`).join('')}`
+        : '<div class="doux petit">Joue ta première main pour débloquer un succès !</div>';
+    } catch { $('[data-stats]', this.el).innerHTML = ''; }
   }
 
   majTables(tables: ResumeTable[], enLigne: number) {

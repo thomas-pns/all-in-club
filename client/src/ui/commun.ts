@@ -59,10 +59,15 @@ export function logoHTML(taille = '') {
 
 /* ------------------------------ Préférences ------------------------------ */
 
-export interface Prefs { quatreCouleurs: boolean; son: boolean; rapide: boolean; toujoursMontrer: boolean; cartesCachees: boolean }
+export interface Prefs { quatreCouleurs: boolean; effets: number; musique: number; rapide: boolean; toujoursMontrer: boolean; cartesCachees: boolean; notifications: boolean }
 const CLE = 'aic-prefs';
-let prefs: Prefs = { quatreCouleurs: false, son: true, rapide: false, toujoursMontrer: false, cartesCachees: false };
-try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(CLE) ?? '{}') }; } catch { /* rien */ }
+let prefs: Prefs = { quatreCouleurs: false, effets: 0.7, musique: 0.35, rapide: false, toujoursMontrer: false, cartesCachees: false, notifications: false };
+try {
+  const lu = JSON.parse(localStorage.getItem(CLE) ?? '{}');
+  if (lu.son === false && lu.effets === undefined) lu.effets = 0; // ancienne préférence
+  delete lu.son;
+  prefs = { ...prefs, ...lu };
+} catch { /* rien */ }
 const abonnes = new Set<(p: Prefs) => void>();
 export const lirePrefs = () => prefs;
 export function ecrirePrefs(p: Partial<Prefs>) {
@@ -73,23 +78,45 @@ export function ecrirePrefs(p: Partial<Prefs>) {
 export function suivrePrefs(f: (p: Prefs) => void) { abonnes.add(f); return () => abonnes.delete(f); }
 
 /** Panneau des réglages personnels. */
-export function ouvrirReglagesPerso(surToujoursMontrer?: (oui: boolean) => void) {
+/** Activation des notifications : fournie par l'application quand le joueur est connecté. */
+let gestionNotifications: ((oui: boolean) => Promise<boolean>) | null = null;
+export function definirNotifications(f: ((oui: boolean) => Promise<boolean>) | null) { gestionNotifications = f; }
+
+export function ouvrirReglagesPerso(surToujoursMontrer?: (oui: boolean) => void, surNotifications: ((oui: boolean) => Promise<boolean>) | null = gestionNotifications) {
   const p = lirePrefs();
+  const glissiere = (cle: 'musique' | 'effets', titre: string) => `
+    <div class="reglage-volume"><span>${titre}</span>
+      <div class="glissiere"><input type="range" min="0" max="100" step="5" value="${Math.round(p[cle] * 100)}" data-vol="${cle}" style="--rempli:${Math.round(p[cle] * 100)}%"></div>
+      <b data-val="${cle}">${Math.round(p[cle] * 100)} %</b></div>`;
   const interrupteur = (cle: keyof Prefs, titre: string, aide: string) => `
-    <label class="pre-actions" style="justify-content:flex-start;margin-bottom:8px"><label style="flex:1;justify-content:space-between">
-      <span>${titre}<br><span class="doux petit" style="font-weight:600">${aide}</span></span>
-      <input type="checkbox" data-cle="${cle}" ${p[cle] ? 'checked' : ''}></label></label>`;
+    <label class="interrupteur"><span class="txt"><b>${titre}</b><small>${aide}</small></span>
+      <input type="checkbox" data-cle="${cle}" ${p[cle] ? 'checked' : ''}><span class="curseur-switch"></span></label>`;
   const pn = panneau(`<h2>Réglages</h2>
+    ${glissiere('musique', '🎷 Musique')}
+    ${glissiere('effets', '🔊 Effets sonores')}
+    ${surNotifications ? interrupteur('notifications', 'Me prévenir quand c\'est mon tour', 'Notification sur le téléphone si l\'appli est en arrière-plan') : ''}
     ${interrupteur('cartesCachees', 'Cacher mes cartes', 'Pour jouer côte à côte : survoler ou maintenir le doigt pour les voir')}
-    ${interrupteur('son', 'Sons', 'Cartes, jetons, tic-tac du temps')}
     ${interrupteur('quatreCouleurs', 'Cartes 4 couleurs', 'Pique noir, cœur rouge, carreau bleu, trèfle vert')}
     ${interrupteur('rapide', 'Animations rapides', 'Tout va deux fois plus vite')}
     ${interrupteur('toujoursMontrer', 'Toujours montrer ma main', 'Même quand je perds à l\'abattage')}`);
-  $$('input[data-cle]', pn.el).forEach((i) => (i as HTMLInputElement).addEventListener('change', () => {
+  $$('input[data-cle]', pn.el).forEach((i) => (i as HTMLInputElement).addEventListener('change', async () => {
     const cle = i.dataset.cle as keyof Prefs;
     const v = (i as HTMLInputElement).checked;
+    if (cle === 'notifications' && surNotifications) {
+      const ok = await surNotifications(v);
+      (i as HTMLInputElement).checked = ok && v;
+      ecrirePrefs({ notifications: ok && v });
+      return;
+    }
     ecrirePrefs({ [cle]: v });
     if (cle === 'toujoursMontrer') surToujoursMontrer?.(v);
+  }));
+  $$('input[data-vol]', pn.el).forEach((i) => (i as HTMLInputElement).addEventListener('input', () => {
+    const cle = i.dataset.vol as 'musique' | 'effets';
+    const v = Number((i as HTMLInputElement).value) / 100;
+    i.style.setProperty('--rempli', `${v * 100}%`);
+    $(`[data-val="${cle}"]`, pn.el).textContent = `${Math.round(v * 100)} %`;
+    ecrirePrefs({ [cle]: v });
   }));
 }
 

@@ -8,6 +8,7 @@ import { analyserMain } from '../moteur/analyse.js';
 import { DefinitionSucces } from '../moteur/succes.js';
 import { Utilisateur } from './comptes.js';
 import { Donnees, idUtilisateur } from './donnees.js';
+import { Notifications } from './notifications.js';
 
 /* ------------------------- Protocole WebSocket ------------------------- */
 
@@ -19,7 +20,8 @@ export type MessageClient =
   | { type: 'regarder'; id: string }
   | { type: 'quitter' }
   | { type: 'cmd'; cmd: CommandeClient }
-  | { type: 'ping' };
+  | { type: 'ping' }
+  | { type: 'visible'; visible: boolean };
 
 export type ResumeTable = ReturnType<Salle['resume']>;
 
@@ -34,7 +36,7 @@ export type MessageServeur =
   | { type: 'erreur'; texte: string }
   | { type: 'pong' };
 
-interface Client { ws: WebSocket; utilisateur: Utilisateur | null; abonneHall: boolean; compteur: number; fenetre: number }
+interface Client { ws: WebSocket; utilisateur: Utilisateur | null; abonneHall: boolean; compteur: number; fenetre: number; visible: boolean }
 
 const memId = (u: Utilisateur) => `u${u.id}`;
 const membre = (u: Utilisateur): Membre => ({ id: memId(u), nom: u.pseudo, avatar: u.avatar, cadre: u.cadre });
@@ -50,7 +52,7 @@ export class Hall {
   private sauvegardes = new Map<string, ReturnType<typeof setTimeout>>();
   private menage: ReturnType<typeof setInterval>;
 
-  constructor(private donnees: Donnees | null = null) {
+  constructor(private donnees: Donnees | null = null, private notifications: Notifications | null = null) {
     // Tables restées sans personne pendant 6 heures : supprimées
     this.menage = setInterval(() => {
       for (const s of this.salles.values()) if (s.nbConnectes === 0 && Date.now() - s.derniereActivite > 6 * 3_600_000) this.supprimer(s);
@@ -108,6 +110,13 @@ export class Hall {
         if (n.length) this.notifierSucces(new Map([[u, n]]));
       },
       modifiee: (s) => this.planifierSauvegarde(s),
+      tourDe: (id, s) => {
+        const u = idUtilisateur(id);
+        if (u === null || !this.notifications) return;
+        const c = this.parMembre.get(id);
+        if (c && c.visible) return; // il regarde déjà la table
+        void this.notifications.tour(u, s.reglages.nom).catch(() => {});
+      },
       vide: (s) => this.supprimer(s),
     };
     void salle;
@@ -127,7 +136,7 @@ export class Hall {
   /* --------------------------- Connexions --------------------------- */
 
   brancher(ws: WebSocket, authentifier: (jeton: string) => Utilisateur | null) {
-    const c: Client = { ws, utilisateur: null, abonneHall: false, compteur: 0, fenetre: Date.now() };
+    const c: Client = { ws, utilisateur: null, abonneHall: false, compteur: 0, fenetre: Date.now(), visible: true };
     this.clients.add(c);
     ws.on('message', (data) => {
       // Limite : 40 messages par seconde et par connexion
@@ -186,6 +195,9 @@ export class Hall {
     const id = memId(u);
 
     switch (msg.type) {
+      case 'visible':
+        c.visible = !!msg.visible;
+        return;
       case 'hall':
         c.abonneHall = true;
         this.envoyer(c, this.messageHall(id));

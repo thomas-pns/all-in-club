@@ -103,9 +103,9 @@ export class EcranTable {
     document.addEventListener('pointerdown', deb);
     this.nettoyages.push(() => document.removeEventListener('pointerdown', deb));
     const p = lirePrefs();
-    reglerSon(p.son);
+    reglerSon(p.effets > 0, p.effets);
     this.nettoyages.push(suivrePrefs((p) => {
-      reglerSon(p.son);
+      reglerSon(p.effets > 0, p.effets);
       this.scene?.options({ quatreCouleurs: p.quatreCouleurs, vitesse: p.rapide ? 2 : 1, cartesCachees: p.cartesCachees });
       this.majMaMain();
     }));

@@ -142,6 +142,8 @@ export interface Sortie {
   envoyer(id: string, msg: MessageSalle): void;
   /** Main terminée : pour l'historique et les statistiques. */
   mainTerminee?(main: EtatMain, table: Table, salle: Salle, enregistrement: EnregistrementMain): void;
+  /** C'est au tour de ce joueur humain (pour le prévenir s'il n'a pas l'appli sous les yeux). */
+  tourDe?(id: string, salle: Salle): void;
   /** Un humain a écrit dans le chat ou envoyé une émote (statistiques). */
   activite?(id: string, type: 'message' | 'emote'): void;
   /** L'état de la salle a changé (pour la sauvegarde). */
@@ -215,6 +217,7 @@ export class Salle {
   /** Plus petit tapis atteint pendant la partie (pour le succès « Le retour »). */
   private minTapis = new Map<string, number>();
   derniereActivite = Date.now();
+  private dernierTourSignale = '';
 
   constructor(opts: {
     id: string; code: string; hote: Membre; reglages: ReglagesSalle; sortie: Sortie;
@@ -561,6 +564,10 @@ export class Salle {
         return;
       }
       const h = this.humains.get(p.id);
+      if (h && this.dernierTourSignale !== `${this.table.numeroMain}:${m.evenements.length}`) {
+        this.dernierTourSignale = `${this.table.numeroMain}:${m.evenements.length}`;
+        this.sortie.tourDe?.(p.id, this);
+      }
       const t = this.reglages.tempsReflexion;
       if (!h || t <= 0) return; // pas de limite de temps
       const fin = maintenant + attente + t * 1000;

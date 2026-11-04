@@ -120,6 +120,10 @@ interface VueSiegeScene {
   expression: string;
   forcee: { ex: Expression; jusqua: number } | null;
   vide: boolean;
+  /** Avatars vivants : phase de respiration et prochain clignement. */
+  phase: number;
+  prochainClin: number;
+  clin: boolean;
 }
 
 function pastille(texte: string, fond: number, couleur: number, taille = 17): Container {
@@ -383,6 +387,7 @@ export class Scene {
       this.sieges.set(i, {
         siege: i, cont, avatar, anneau, plaque, nom, tapis, badge, bulle, libMain, mise, cartes: [], pos,
         avatarId: null, expression: '', forcee: null, vide: true,
+        phase: Math.random() * Math.PI * 2, prochainClin: performance.now() + 1500 + Math.random() * 4000, clin: false,
       });
     }
     // Emplacements du tableau
@@ -530,6 +535,7 @@ export class Scene {
   private expressionDe(s: VueSiege, e: VueSalle, sv: VueSiegeScene): Expression {
     if (sv.forcee && sv.forcee.jusqua > performance.now()) return sv.forcee.ex;
     sv.forcee = null;
+    if (sv.clin) return 'cligne';
     if (e.aParler === s.siege) return 'concentre';
     if (s.aTapis && e.mainEnCours) return 'sueur';
     return 'neutre';
@@ -577,8 +583,25 @@ export class Scene {
   /* ------------------------------ Image par image ------------------------------ */
 
   private image() {
-    // Anneau de temps
     const t = performance.now();
+    // Avatars vivants : respiration lente et clignements au hasard
+    for (const sv of this.sieges.values()) {
+      if (sv.vide || !sv.avatar.visible || !sv.avatar.texture?.width) continue;
+      const base = this.geo.avatar / sv.avatar.texture.width;
+      const souffle = 1 + 0.018 * Math.sin(t / 1150 + sv.phase);
+      sv.avatar.scale.set(base * (2 - souffle) ** 0.3 * souffle ** 0.7, base * souffle);
+      sv.avatar.y = -(souffle - 1) * this.geo.avatar * 0.25;
+      if (t >= sv.prochainClin && this.etat) {
+        const s = this.etat.sieges[sv.siege];
+        if (s && !s.absent && !s.deconnecte && !(s.couche && this.etat.mainEnCours) && !(sv.forcee && sv.forcee.jusqua > t)) {
+          sv.clin = true;
+          void this.majAvatar(sv, s, this.etat);
+          setTimeout(() => { sv.clin = false; const s2 = this.etat?.sieges[sv.siege]; if (s2 && this.etat && !sv.cont.destroyed) void this.majAvatar(sv, s2, this.etat); }, 150);
+        }
+        sv.prochainClin = t + 2200 + Math.random() * 4500 + (Math.random() < 0.15 ? -1800 : 0); // parfois un double clignement
+      }
+    }
+    // Anneau de temps
     for (const sv of this.sieges.values()) {
       if (sv.vide) continue;
       sv.anneau.clear();
