@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["moteur/**/*.ts", "serveur/**/*.ts", "client/src/**/*.ts", "vite.config.ts"]
+  "include": ["moteur/**/*.ts", "serveur/**/*.ts", "client/src/**/*.ts", "vite.config.ts", "vitest.config.ts"]
 }
