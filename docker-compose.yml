@@ -6,7 +6,6 @@ services:
     pull_policy: always
     container_name: all-in-club
     restart: unless-stopped
-    user: "1026:100"            # utilisateur DSM (commande « id » en SSH pour vérifier)
     ports:
       - "8766:3000"             # NE PAS ouvrir ce port sur la box : passer par le proxy inversé
     volumes:

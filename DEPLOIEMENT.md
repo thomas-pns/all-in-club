@@ -21,8 +21,7 @@ Le NAS peut ainsi télécharger l'image sans identifiant (le code est déjà pub
    - Nom du projet : `all-in-club` ;
    - Chemin : `/docker/all-in-club` ;
    - Source : **Créer docker-compose.yml**, puis colle le contenu de [`docker-compose.yml`](docker-compose.yml).
-3. Si ton utilisateur DSM n'est pas le premier créé, adapte `user: "1026:100"` (commande `id` en SSH), comme pour Neon Breaker.
-4. **Suivant**, puis **Terminé**. Le conteneur `all-in-club` démarre.
+3. **Suivant**, puis **Terminé**. Le conteneur `all-in-club` démarre.
 
 Vérification depuis un PC de la maison : `http://IP-DU-NAS:8766/api/sante` affiche `{"ok":true,...}`.
 
@@ -91,5 +90,5 @@ Les mots de passe sont hachés (scrypt) : personne ne peut les lire dans la base
 |---|---|
 | Page inaccessible | `https://allin.parlotte.synology.me/api/sante` répond-il ? Sinon, vérifie la règle de proxy inversé. |
 | « Connexion perdue… » en boucle à table | Il manque l'en-tête **WebSocket** dans la règle de proxy inversé. |
-| Le conteneur redémarre en boucle | Container Manager > Conteneur > all-in-club > **Journal**. « Permission denied » sur /data : corrige `user:`. |
+| Le conteneur s'arrête aussitôt | Container Manager > Conteneur > all-in-club > **Journal**. « unable to open database file » : le conteneur ne peut pas écrire dans `data` (ne pas ajouter de ligne `user:`). |
 | « pull access denied » à la construction | L'image n'est pas encore publique (étape 1). |
