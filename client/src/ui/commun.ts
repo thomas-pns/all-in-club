@@ -59,9 +59,9 @@ export function logoHTML(taille = '') {
 
 /* ------------------------------ Préférences ------------------------------ */
 
-export interface Prefs { quatreCouleurs: boolean; son: boolean; rapide: boolean; toujoursMontrer: boolean }
+export interface Prefs { quatreCouleurs: boolean; son: boolean; rapide: boolean; toujoursMontrer: boolean; cartesCachees: boolean }
 const CLE = 'aic-prefs';
-let prefs: Prefs = { quatreCouleurs: false, son: true, rapide: false, toujoursMontrer: false };
+let prefs: Prefs = { quatreCouleurs: false, son: true, rapide: false, toujoursMontrer: false, cartesCachees: false };
 try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(CLE) ?? '{}') }; } catch { /* rien */ }
 const abonnes = new Set<(p: Prefs) => void>();
 export const lirePrefs = () => prefs;
@@ -80,6 +80,7 @@ export function ouvrirReglagesPerso(surToujoursMontrer?: (oui: boolean) => void)
       <span>${titre}<br><span class="doux petit" style="font-weight:600">${aide}</span></span>
       <input type="checkbox" data-cle="${cle}" ${p[cle] ? 'checked' : ''}></label></label>`;
   const pn = panneau(`<h2>Réglages</h2>
+    ${interrupteur('cartesCachees', 'Cacher mes cartes', 'Pour jouer côte à côte : survoler ou maintenir le doigt pour les voir')}
     ${interrupteur('son', 'Sons', 'Cartes, jetons, tic-tac du temps')}
     ${interrupteur('quatreCouleurs', 'Cartes 4 couleurs', 'Pique noir, cœur rouge, carreau bleu, trèfle vert')}
     ${interrupteur('rapide', 'Animations rapides', 'Tout va deux fois plus vite')}

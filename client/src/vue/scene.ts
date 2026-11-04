@@ -10,6 +10,17 @@ import { Animateur, EASE } from './anim';
 import { textureAvatar, texturesCartes, decomposer, fmt, CARTE_L, textureCanvas } from '../art/rendu';
 import { Expression } from '../art/avatars';
 import { jouerSon } from './son';
+import { evaluer, decrire } from '../../../moteur/evaluation';
+
+const NOMS_RANG = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Valet', 'Dame', 'Roi', 'As'];
+const PAIRES = ['de 2', 'de 3', 'de 4', 'de 5', 'de 6', 'de 7', "d'8", 'de 9', 'de 10', 'de valets', 'de dames', 'de rois', "d'as"];
+/** Nom de ma main : « Paire de dames », « As-Roi assortis »… */
+export function nomMaMain(cartes: number[], tableau: number[]): string {
+  if (tableau.length) return decrire(evaluer(cartes.concat(tableau)));
+  const [a, b] = cartes.map((x) => x >> 2).sort((x, y) => y - x);
+  if (a === b) return `Paire ${PAIRES[a]}`;
+  return `${NOMS_RANG[a]}-${NOMS_RANG[b]}${(cartes[0] & 3) === (cartes[1] & 3) ? ' assortis' : ''}`;
+}
 
 const T = 0x2a1e3f;
 const OR = 0xffc23d;
@@ -33,19 +44,19 @@ interface Geo {
 function geometrie(d: Disposition): Geo {
   if (d === 'paysage') {
     return {
-      W: 1600, H: 900, cx: 800, cy: 430,
-      feutre: { x: 215, y: 150, w: 1170, h: 560 },
-      rx: 690, ry: 352, avatar: 118, carteTable: 88, petiteCarte: 44, maCarte: 104,
-      maCartePos: (s) => ({ x: s.x + 160, y: s.y - 6 }),
-      donneur: { x: 800, y: 250 },
+      W: 1600, H: 900, cx: 800, cy: 425,
+      feutre: { x: 140, y: 120, w: 1320, h: 610 },
+      rx: 700, ry: 338, avatar: 124, carteTable: 98, petiteCarte: 48, maCarte: 112,
+      maCartePos: (s) => ({ x: s.x + 168, y: s.y - 8 }),
+      donneur: { x: 800, y: 255 },
     };
   }
   return {
     W: 900, H: 1500, cx: 450, cy: 700,
-    feutre: { x: 120, y: 210, w: 660, h: 990 },
-    rx: 362, ry: 590, avatar: 128, carteTable: 104, petiteCarte: 46, maCarte: 122,
-    maCartePos: (s) => ({ x: s.x, y: s.y - 175 }),
-    donneur: { x: 450, y: 470 },
+    feutre: { x: 70, y: 165, w: 760, h: 1075 },
+    rx: 392, ry: 588, avatar: 134, carteTable: 114, petiteCarte: 50, maCarte: 130,
+    maCartePos: (s) => ({ x: s.x, y: s.y - 186 }),
+    donneur: { x: 450, y: 450 },
   };
 }
 
@@ -123,7 +134,7 @@ function pastille(texte: string, fond: number, couleur: number, taille = 17): Co
 
 /* ------------------------------ Scène ------------------------------ */
 
-export interface OptionsScene { quatreCouleurs: boolean; vitesse: number }
+export interface OptionsScene { quatreCouleurs: boolean; vitesse: number; cartesCachees: boolean }
 
 export class Scene {
   app!: Application;
@@ -144,7 +155,13 @@ export class Scene {
   private etat: VueSalle | null = null;
   private tour: { siege: number; fin: number; total: number; banque: boolean } | null = null;
   private dernierTic = 0;
-  private opts: OptionsScene = { quatreCouleurs: false, vitesse: 1 };
+  private opts: OptionsScene = { quatreCouleurs: false, vitesse: 1, cartesCachees: false };
+  /** Mode « côte à côte » : mes cartes restent retournées sauf quand je les survole ou appuie dessus. */
+  private revele = false;
+  private mesValeurs: number[] | null = null;
+  private indice = new Container();
+  onRevele: ((visible: boolean) => void) | null = null;
+  private etatCible: VueSalle | null = null;
   private confettis: { g: Graphics; vx: number; vy: number; vr: number; vie: number }[] = [];
   onClicSiegeVide: ((siege: number) => void) | null = null;
   private observateur: ResizeObserver | null = null;
@@ -165,6 +182,8 @@ export class Scene {
     s.bouton.addChild(bt, btT);
     s.bouton.visible = false;
     s.coucheTable.addChild(s.pot, s.bouton);
+    s.indice.visible = false;
+    s.coucheEffets.addChild(s.indice);
     s.app.ticker.add(() => s.image());
     s.app.renderer.on('resize', () => s.redimensionner());
     // Pixi ne suit que la fenêtre : on suit aussi la taille de la zone (barre d'actions qui change…)
@@ -180,6 +199,68 @@ export class Scene {
     Object.assign(this.opts, o);
     this.anim.vitesse = this.opts.vitesse;
     if (o.quatreCouleurs !== undefined && o.quatreCouleurs !== avant && this.etat) this.appliquerEtat(this.etat, true);
+    else this.majMesCartes();
+  }
+
+  /* ------------------------------ Cartes cachées (jeu côte à côte) ------------------------------ */
+
+  private estCachee(): boolean {
+    return this.opts.cartesCachees && !this.revele && !!this.etat?.mainEnCours;
+  }
+
+  private rendreInteractive(c: Sprite) {
+    if ((c as any).__regard) return;
+    (c as any).__regard = true;
+    c.eventMode = 'static';
+    c.cursor = 'pointer';
+    const montrer = () => this.reveler(true), cacher = () => this.reveler(false);
+    c.on('pointerover', montrer).on('pointerdown', montrer);
+    c.on('pointerout', cacher).on('pointerup', cacher).on('pointerupoutside', cacher).on('pointercancel', cacher);
+  }
+
+  /** Pendant l'animation d'une rue, le nom de ma main tient compte des cartes déjà posées. */
+  private indiceTableau(_n: number) {
+    const e = this.etat;
+    if (!e) return;
+    const vals = this.tableau.filter((s) => !s.destroyed).length;
+    const sv = e.monSiege !== null ? this.sieges.get(e.monSiege) : undefined;
+    if (!sv || !this.mesValeurs || this.estCachee() || !this.indice.visible) return;
+    const tab = (this.etatCible?.tableau ?? e.tableau).slice(0, vals);
+    this.indice.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this.indice.addChild(pastille(nomMaMain(this.mesValeurs, tab), OR, T, 17));
+  }
+
+  private reveler(v: boolean) {
+    if (this.revele === v) return;
+    this.revele = v;
+    this.majMesCartes();
+    this.onRevele?.(v);
+  }
+
+  /** Met à jour la face de mes cartes et l'indice « Maintiens pour voir ». */
+  private majMesCartes() {
+    const e = this.etat;
+    const sv = e?.monSiege !== null && e?.monSiege !== undefined ? this.sieges.get(e.monSiege) : undefined;
+    const valeurs = this.mesValeurs;
+    const actives = !!sv && sv.cartes.length === 2 && !!valeurs;
+    if (actives) {
+      sv!.cartes.forEach((c, i) => {
+        if (c.destroyed) return;
+        c.texture = this.textureCarte(this.estCachee() ? null : valeurs![i]);
+        this.rendreInteractive(c);
+      });
+    }
+    // Sous mes cartes : le nom de ma main, ou l'indice si elles sont cachées
+    const enJeu = actives && sv!.cartes[0].alpha > 0.9 && !!e?.mainEnCours;
+    this.indice.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this.indice.visible = enJeu;
+    if (enJeu) {
+      const cachee = this.estCachee();
+      const tableau = this.tableau.length === (e?.tableau.length ?? 0) ? e!.tableau : (e?.tableau ?? []).slice(0, this.tableau.length);
+      this.indice.addChild(cachee ? pastille('👁 Maintiens pour voir', 0x3a2d5e, CREME, 15) : pastille(nomMaMain(valeurs!, tableau), OR, T, 17));
+      const p = this.geo.maCartePos(sv!.pos);
+      this.indice.position.set(p.x, p.y + this.geo.maCarte * 0.84);
+    }
   }
 
   detruire() {
@@ -219,7 +300,8 @@ export class Scene {
       x.roundRect(dx, dy, w, h, r);
     };
     // Lumière de la lampe
-    const lampe = x.createRadialGradient(g.cx, g.cy, 0, g.cx, g.cy, Math.max(g.W, g.H) * 0.6);
+    // (rayon assez court pour s'éteindre avant les bords : pas de rectangle visible)
+    const lampe = x.createRadialGradient(g.cx, g.cy, 0, g.cx, g.cy, Math.min(g.W, g.H) * 0.55);
     lampe.addColorStop(0, 'rgba(255,217,138,0.28)');
     lampe.addColorStop(1, 'rgba(255,217,138,0)');
     x.fillStyle = lampe; x.fillRect(0, 0, g.W, g.H);
@@ -369,11 +451,15 @@ export class Scene {
         c.position.set(p.x, p.y);
         c.rotation = p.rot;
         c.scale.set(p.w / CARTE_L);
-        c.texture = this.textureCarte(s!.cartes ? s!.cartes[k] : null);
+        c.texture = this.textureCarte(s!.cartes && !(moi && this.estCachee()) ? s!.cartes[k] : null);
         c.alpha = s!.couche ? 0.45 : 1;
         c.tint = 0xffffff;
+        if (moi) this.rendreInteractive(c);
       });
+      if (moi) this.mesValeurs = s!.cartes;
     }
+    if (!e.mainEnCours && this.revele) this.revele = false;
+    this.majMesCartes();
     // Tableau
     while (this.tableau.length > e.tableau.length) this.tableau.pop()!.destroy();
     e.tableau.forEach((c, i) => {
@@ -437,7 +523,7 @@ export class Scene {
     if (etiquette) { const p = pastille(etiquette[0] as string, etiquette[1] as number, 0xffffff, 14); sv.badge.addChild(p); }
     if (e.hote === s.id && !s.bot) {
       const c = pastille('Hôte', OR, T, 12);
-      c.position.set(-g.avatar * 0.42, -g.avatar * 0.18);
+      c.position.set(g.avatar * 0.42, -g.avatar * 0.34);
       c.scale.set(0.9);
       sv.badge.addChild(c);
     }
@@ -596,6 +682,7 @@ export class Scene {
     }
     const g = this.geo;
     const R = RYTHME;
+    this.etatCible = apres;
     // Modèle local
     const tapis = new Map<number, number>(), mise = new Map<number, number>();
     for (const s of avant.sieges) if (s) { tapis.set(s.siege, s.tapis); mise.set(s.siege, s.mise); }
@@ -615,6 +702,9 @@ export class Scene {
           this.tableau.forEach((c) => c.destroy()); this.tableau = [];
           pot = 0; this.pot.maj(0);
           mise.clear();
+          this.mesValeurs = null;
+          this.revele = false;
+          this.indice.visible = false;
           this.etat = { ...avant, sieges: avant.sieges.map((s) => s && { ...s, couche: false, aTapis: false, main: null, dansLaMain: true }), mainEnCours: true };
           for (const [i, sv] of this.sieges) { const s = apres.sieges[i]; if (s) this.majSiege(sv, s, { ...apres, aParler: null }); }
           for (const [i] of this.sieges) { const s = apres.sieges[i]; if (s) tapis.set(i, s.tapis + (s.mise ?? 0)); }
@@ -649,6 +739,7 @@ export class Scene {
               c.rotation = -0.6;
               c.alpha = 0;
               sv.cartes[tour] = c;
+              if (estMoi) this.rendreInteractive(c);
               const d = k++ * R.donneParCarte;
               promesses.push(this.anim.attendre(d).then(() => {
                 c.alpha = 1;
@@ -664,7 +755,10 @@ export class Scene {
           if (moi === null) break;
           const sv = this.sieges.get(moi);
           if (!sv) break;
+          this.mesValeurs = ev.cartes;
+          if (this.estCachee()) { this.majMesCartes(); break; }
           await Promise.all(ev.cartes.map((c, i) => sv.cartes[i] ? this.anim.attendre(i * 90).then(() => this.retourner(sv.cartes[i], c)) : Promise.resolve()));
+          this.majMesCartes();
           break;
         }
         case 'action': {
@@ -684,6 +778,7 @@ export class Scene {
             this.bulle(ev.siege, nom, 0x6b5f8a, 0xffffff);
             jouerSon('coucher');
             const estMoi = ev.siege === moi;
+            if (estMoi) this.indice.visible = false;
             sv.cartes.forEach((c) => {
               if (estMoi) { c.alpha = 0.45; return; }
               void this.anim.tween(c, { x: g.cx, y: g.cy - 40, alpha: 0, rotation: c.rotation + 1.2 }, 380, { ease: EASE.entree }).then(() => c.destroy());
@@ -748,6 +843,7 @@ export class Scene {
               await this.retourner(sp, c, 260);
             });
           }));
+          if (this.mesValeurs) this.indiceTableau(ev.cartes.length);
           await this.anim.attendre(R.rue - 600);
           break;
         }

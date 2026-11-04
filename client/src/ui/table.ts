@@ -4,7 +4,6 @@
  */
 import type { CommandeClient, MessageSalle, VueSalle, ReglagesSalle, Resultats } from '../../../moteur/salle';
 import type { Legales, Action } from '../../../moteur/main';
-import { evaluer, decrire } from '../../../moteur/evaluation';
 import { Scene } from '../vue/scene';
 import { jouerSon, reglerSon, debloquerSon } from '../vue/son';
 import { fmt } from '../art/rendu';
@@ -33,6 +32,12 @@ export class EcranTable {
   private derniereAction = 0;
   private detruit = false;
   private nettoyages: (() => void)[] = [];
+  private revele = false;
+
+  /** Le nom de ma main reste masqué en mode « cartes cachées ». */
+  private majMaMain() {
+    $('.ma-main', this.el)?.classList.toggle('masquee', lirePrefs().cartesCachees && !this.revele);
+  }
 
   constructor(racine: HTMLElement, private canal: Canal, private onQuitter: () => void) {
     this.el = html(`<div class="ecran-table">
@@ -41,6 +46,7 @@ export class EcranTable {
         <div style="min-width:0"><div class="titre" data-nom>Table</div><div class="infos" data-infos></div></div>
         <div class="espace"></div>
         <span class="code cache" data-code title="Copier le code"></span>
+        <button class="btn btn-rond btn-fantome" data-cacher title="Cacher mes cartes (jeu côte à côte)" aria-label="Cacher mes cartes"></button>
         <button class="btn btn-rond" data-menu title="Menu" aria-label="Menu">☰</button>
       </div>
       <div class="zone-scene" data-scene></div>
@@ -50,6 +56,11 @@ export class EcranTable {
     $('[data-quitter]', this.el).onclick = () => this.quitter();
     $('[data-menu]', this.el).onclick = () => this.menu();
     $('[data-code]', this.el).onclick = () => this.copierCode();
+    const bCacher = $('[data-cacher]', this.el);
+    const majCacher = () => { const on = lirePrefs().cartesCachees; bCacher.textContent = on ? '🙈' : '👁'; bCacher.classList.toggle('btn-or', on); bCacher.classList.toggle('btn-fantome', !on); };
+    majCacher();
+    bCacher.onclick = () => { ecrirePrefs({ cartesCachees: !lirePrefs().cartesCachees }); toast(lirePrefs().cartesCachees ? 'Cartes cachées : survole-les ou maintiens le doigt dessus pour les voir' : 'Cartes visibles'); };
+    this.nettoyages.push(suivrePrefs(majCacher));
     this.debrancher = canal.brancher((m) => this.recevoir(m));
     const clavier = (e: KeyboardEvent) => this.clavier(e);
     document.addEventListener('keydown', clavier);
@@ -61,7 +72,8 @@ export class EcranTable {
     reglerSon(p.son);
     this.nettoyages.push(suivrePrefs((p) => {
       reglerSon(p.son);
-      this.scene?.options({ quatreCouleurs: p.quatreCouleurs, vitesse: p.rapide ? 2 : 1 });
+      this.scene?.options({ quatreCouleurs: p.quatreCouleurs, vitesse: p.rapide ? 2 : 1, cartesCachees: p.cartesCachees });
+      this.majMaMain();
     }));
     const vis = () => { if (document.visibilityState === 'visible') this.scene?.accelerer(); };
     document.addEventListener('visibilitychange', vis);
@@ -73,7 +85,8 @@ export class EcranTable {
     await document.fonts.ready.catch(() => {});
     if (this.detruit) return;
     const p = lirePrefs();
-    this.scene = await Scene.creer($('[data-scene]', this.el), { quatreCouleurs: p.quatreCouleurs, vitesse: p.rapide ? 2 : 1 });
+    this.scene = await Scene.creer($('[data-scene]', this.el), { quatreCouleurs: p.quatreCouleurs, vitesse: p.rapide ? 2 : 1, cartesCachees: p.cartesCachees });
+    this.scene.onRevele = (v) => { this.revele = v; this.majMaMain(); };
     if (this.detruit) { this.scene.detruire(); return; }
     this.scene.onClicSiegeVide = (s) => { if (this.etat?.monSiege === null) this.canal.envoyer({ c: 'asseoir', siege: s }); };
     if (this.etat) this.scene.appliquerEtat(this.etat);
@@ -170,9 +183,7 @@ export class EcranTable {
     const moi = e.monSiege !== null ? e.sieges[e.monSiege] : null;
     if (e.numeroMain !== this.mainPreAction) { this.preAction = null; this.mainPreAction = e.numeroMain; }
 
-    // Ma main en cours
-    const maMain = moi?.cartes && moi.dansLaMain && !moi.couche
-      ? `<div class="ma-main">${esc(e.tableau.length ? decrire(evaluer(moi.cartes.concat(e.tableau))) : mainDeDepart(moi.cartes))}</div>` : '';
+    const maMain = '';
 
     if (e.statut === 'terminee') { barre.innerHTML = `<div class="message-barre">Partie terminée</div>`; return; }
     if (!moi) {
@@ -194,15 +205,17 @@ export class EcranTable {
       const L = e.aParler !== null ? e : null; void L;
       const miseMax = Math.max(...e.sieges.map((s) => s?.mise ?? 0));
       const aSuivre = miseMax - moi.mise;
-      barre.innerHTML = `${maMain}<div class="pre-actions">
-        <label><input type="checkbox" data-pre="parole_couche" ${this.preAction === 'parole_couche' ? 'checked' : ''}> ${aSuivre > 0 ? 'Se coucher' : 'Parole / Couché'}</label>
-        ${aSuivre === 0 ? `<label><input type="checkbox" data-pre="parole" ${this.preAction === 'parole' ? 'checked' : ''}> Parole</label>` : ''}
-        <label><input type="checkbox" data-pre="suivre_tout" ${this.preAction === 'suivre_tout' ? 'checked' : ''}> ${aSuivre > 0 ? `Suivre ${fmt(Math.min(aSuivre, moi.tapis))}` : 'Suivre tout'}</label>
+      const bascule = (v: PreAction, texte: string) => `<button class="bascule ${this.preAction === v ? 'on' : ''}" data-pre="${v}"><span class="voyant"></span>${texte}</button>`;
+      barre.innerHTML = `<div class="titre-barre">Prépare ta réponse</div><div class="pre-actions" style="--n:${aSuivre === 0 ? 3 : 2}">
+        ${bascule('parole_couche', aSuivre > 0 ? 'Me coucher' : 'Parole / Couché')}
+        ${aSuivre === 0 ? bascule('parole', 'Parole') : ''}
+        ${bascule('suivre_tout', aSuivre > 0 ? `Suivre ${fmt(Math.min(aSuivre, moi.tapis))}` : 'Suivre tout')}
       </div>`;
-      $$('input[data-pre]', barre).forEach((i) => (i as HTMLInputElement).onchange = () => {
-        const v = i.dataset.pre as PreAction;
-        this.preAction = (i as HTMLInputElement).checked ? v : null;
-        $$('input[data-pre]', barre).forEach((x) => { if (x !== i) (x as HTMLInputElement).checked = false; });
+      $$('[data-pre]', barre).forEach((b) => b.onclick = () => {
+        const v = b.dataset.pre as PreAction;
+        this.preAction = this.preAction === v ? null : v;
+        $$('[data-pre]', barre).forEach((x) => x.classList.toggle('on', x.dataset.pre === this.preAction));
+        jouerSon('clic');
       });
       return;
     }
@@ -225,7 +238,7 @@ export class EcranTable {
       $('[data-poster]', barre).onclick = () => this.canal.envoyer({ c: 'poster' });
       return;
     }
-    barre.innerHTML = maMain || '<div class="message-barre doux">Prochaine main dans un instant…</div>';
+    barre.innerHTML = '<div class="message-barre doux">Prochaine main dans un instant…</div>';
   }
 
   private appliquerPreAction(L: Legales): boolean {
@@ -250,10 +263,14 @@ export class EcranTable {
     barre.innerHTML = `${maMain}
       ${L.peutRelancer && L.minA < L.maxA ? `<div class="curseur-mise">
         <div class="raccourcis">
-          <button data-r="min">Min</button><button data-r="0.5">½ pot</button><button data-r="0.75">¾ pot</button><button data-r="1">Pot</button><button data-r="max">Tapis</button>
+          <button data-r="min">Min</button><button data-r="0.5">½ pot</button><button data-r="0.75">¾ pot</button><button data-r="1">Pot</button><button data-r="max" class="tapis">Tapis</button>
         </div>
-        <input type="range" min="${L.minA}" max="${L.maxA}" step="${pas}" value="${L.minA}" data-curseur aria-label="Montant">
-        <span class="montant" data-montant>${fmt(L.minA)}</span>
+        <div class="reglage-mise">
+          <button class="pas" data-pas="-1" aria-label="Moins">−</button>
+          <div class="glissiere"><input type="range" min="${L.minA}" max="${L.maxA}" step="${pas}" value="${L.minA}" data-curseur aria-label="Montant"></div>
+          <button class="pas" data-pas="1" aria-label="Plus">+</button>
+          <span class="montant" data-montant>${fmt(L.minA)}</span>
+        </div>
       </div>` : ''}
       <div class="actions-principales">
         <button class="btn btn-corail" data-a="coucher">Se coucher</button>
@@ -264,13 +281,34 @@ export class EcranTable {
     const montant = () => (curseur ? Number(curseur.value) : L.minA);
     const majMontant = () => {
       const v = montant();
+      if (curseur) curseur.style.setProperty('--rempli', `${((v - L.minA) / Math.max(1, L.maxA - L.minA)) * 100}%`);
       const m = $('[data-montant]', barre); if (m) m.textContent = fmt(v);
       $('[data-mt]', barre).textContent = fmt(v);
       $('[data-verbe]', barre).textContent = v >= L.maxA ? 'Tapis' : verbe;
     };
     if (curseur) curseur.oninput = majMontant;
+    majMontant();
+    // Boutons − / + : une grosse blinde par appui, en continu si on maintient
+    const pasMise = Math.max(pas, e.reglages.gb);
+    $$('[data-pas]', barre).forEach((b) => {
+      let minuterie: ReturnType<typeof setTimeout> | null = null;
+      const pousser = () => {
+        if (!curseur) return;
+        const v = Math.max(L.minA, Math.min(L.maxA, Math.round((Number(curseur.value) + Number(b.dataset.pas) * pasMise) / pas) * pas));
+        curseur.value = String(v);
+        $$('[data-r]', barre).forEach((x) => x.classList.remove('on'));
+        majMontant();
+        jouerSon('jeton');
+      };
+      const arreter = () => { if (minuterie) clearTimeout(minuterie); minuterie = null; };
+      const repeter = (d: number) => { pousser(); minuterie = setTimeout(() => repeter(Math.max(45, d * 0.8)), d); };
+      b.onpointerdown = (ev) => { ev.preventDefault(); arreter(); repeter(380); };
+      b.onpointerup = b.onpointerleave = b.onpointercancel = arreter;
+    });
+    if (curseur) curseur.addEventListener('input', () => $$('[data-r]', barre).forEach((x) => x.classList.remove('on')));
     $$('[data-r]', barre).forEach((b) => b.onclick = () => {
       if (!curseur) return;
+      $$('[data-r]', barre).forEach((x) => x.classList.toggle('on', x === b));
       const r = b.dataset.r!;
       let v = r === 'min' ? L.minA : r === 'max' ? L.maxA : L.estMise ? e.potTotal * Number(r) : miseActuelle + potApresSuivre * Number(r);
       v = Math.round(v / pas) * pas;
@@ -460,10 +498,3 @@ export class EcranTable {
   }
 }
 
-const NOMS_RANG = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Valet', 'Dame', 'Roi', 'As'];
-const PAIRES = ['de 2', 'de 3', 'de 4', 'de 5', 'de 6', 'de 7', "d'8", 'de 9', 'de 10', 'de valets', 'de dames', 'de rois', "d'as"];
-function mainDeDepart(c: number[]): string {
-  const [a, b] = c.map((x) => x >> 2).sort((x, y) => y - x);
-  if (a === b) return `Paire ${PAIRES[a]}`;
-  return `${NOMS_RANG[a]}-${NOMS_RANG[b]}${(c[0] & 3) === (c[1] & 3) ? ' assortis' : ''}`;
-}
