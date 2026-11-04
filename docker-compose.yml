@@ -1,0 +1,22 @@
+# All-In Club — à coller dans Container Manager > Projet > Créer
+# Les données (comptes) sont rangées dans le dossier « data » à côté de ce fichier.
+services:
+  all-in-club:
+    image: ghcr.io/thomas-pns/all-in-club:latest
+    pull_policy: always
+    container_name: all-in-club
+    restart: unless-stopped
+    user: "1026:100"            # utilisateur DSM (commande « id » en SSH pour vérifier)
+    ports:
+      - "8766:3000"             # NE PAS ouvrir ce port sur la box : passer par le proxy inversé
+    volumes:
+      - ./data:/data
+    environment:
+      URL_PUBLIQUE: https://allin.parlotte.synology.me
+      # E-mail « mot de passe oublié » (facultatif) : exemple avec Gmail et un mot de passe d'application
+      # SMTP_HOTE: smtp.gmail.com
+      # SMTP_PORT: "465"
+      # SMTP_UTILISATEUR: ton.adresse@gmail.com
+      # SMTP_MDP: motdepassedapplication
+      # SMTP_EXPEDITEUR: All-In Club <ton.adresse@gmail.com>
+    mem_limit: 256m

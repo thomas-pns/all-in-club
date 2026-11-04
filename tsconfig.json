@@ -8,7 +8,7 @@
     "noUncheckedIndexedAccess": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
-  "include": ["moteur/**/*.ts", "serveur/**/*.ts"]
+  "include": ["moteur/**/*.ts", "serveur/**/*.ts", "client/src/**/*.ts", "vite.config.ts"]
 }
