@@ -3,10 +3,11 @@
  */
 import type { WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
-import { Salle, CommandeClient, ReglagesSalle, REGLAGES_DEFAUT, MessageSalle, genererCode, Membre, Resultats } from '../moteur/salle.js';
-import { EtatMain } from '../moteur/main.js';
-import { Table } from '../moteur/table.js';
+import { Salle, CommandeClient, ReglagesSalle, REGLAGES_DEFAUT, genererCode, Membre, Sortie, MessageSalle } from '../moteur/salle.js';
+import { analyserMain } from '../moteur/analyse.js';
+import { DefinitionSucces } from '../moteur/succes.js';
 import { Utilisateur } from './comptes.js';
+import { Donnees, idUtilisateur } from './donnees.js';
 
 /* ------------------------- Protocole WebSocket ------------------------- */
 
@@ -29,18 +30,14 @@ export type MessageServeur =
   | { type: 'sorti'; raison?: string }
   | { type: 'salle'; msg: MessageSalle }
   | { type: 'remplace' }
+  | { type: 'succes'; succes: Omit<DefinitionSucces, 'test'>[] }
   | { type: 'erreur'; texte: string }
   | { type: 'pong' };
 
 interface Client { ws: WebSocket; utilisateur: Utilisateur | null; abonneHall: boolean; compteur: number; fenetre: number }
 
 const memId = (u: Utilisateur) => `u${u.id}`;
-const membre = (u: Utilisateur): Membre => ({ id: memId(u), nom: u.pseudo, avatar: u.avatar });
-
-export interface Ecouteurs {
-  mainTerminee?(main: EtatMain, table: Table, salle: Salle): void;
-  partieTerminee?(r: Resultats, salle: Salle): void;
-}
+const membre = (u: Utilisateur): Membre => ({ id: memId(u), nom: u.pseudo, avatar: u.avatar, cadre: u.cadre });
 
 export class Hall {
   private salles = new Map<string, Salle>();
@@ -50,7 +47,79 @@ export class Hall {
   private parMembre = new Map<string, Client>();      // une connexion active par joueur
   private hallEnAttente: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private ecouteurs: Ecouteurs = {}) {}
+  private sauvegardes = new Map<string, ReturnType<typeof setTimeout>>();
+  private menage: ReturnType<typeof setInterval>;
+
+  constructor(private donnees: Donnees | null = null) {
+    // Tables restées sans personne pendant 6 heures : supprimées
+    this.menage = setInterval(() => {
+      for (const s of this.salles.values()) if (s.nbConnectes === 0 && Date.now() - s.derniereActivite > 6 * 3_600_000) this.supprimer(s);
+    }, 10 * 60_000);
+    this.menage.unref?.();
+  }
+
+  /** Recrée les tables sauvegardées (après un redémarrage du serveur). */
+  restaurer() {
+    if (!this.donnees) return;
+    for (const sv of this.donnees.salles()) {
+      try {
+        const hote = sv.joueurs.find((j) => j.membre.id === sv.hote)?.membre ?? sv.joueurs.find((j) => !j.bot)?.membre;
+        if (!hote) { this.donnees.supprimerSalle(sv.id); continue; }
+        const s: Salle = new Salle({ id: sv.id, code: sv.code, hote, reglages: sv.reglages, sauvegarde: sv, sortie: this.sortie(() => s) });
+        this.salles.set(s.id, s);
+        this.parCode.set(s.code, s);
+        for (const j of sv.joueurs) if (!j.bot) this.ouEst.set(j.membre.id, s.id);
+      } catch (e) {
+        console.error('Table impossible à restaurer', sv.id, e);
+        this.donnees.supprimerSalle(sv.id);
+      }
+    }
+  }
+
+  private notifierSucces(par: Map<number, DefinitionSucces[]>) {
+    for (const [u, defs] of par) this.envoyerMembre(`u${u}`, { type: 'succes', succes: defs.map(({ test: _t, ...d }) => d) });
+  }
+
+  /** Sortie d'une salle : messages vers les joueurs, statistiques, sauvegarde. */
+  private sortie(salle: () => Salle): Sortie {
+    return {
+      envoyer: (dest, m) => {
+        if (m.type === 'exclu') { this.ouEst.delete(dest); this.envoyerMembre(dest, { type: 'sorti', raison: "L'hôte t'a exclu de la table" }); return; }
+        this.envoyerMembre(dest, { type: 'salle', msg: m });
+      },
+      mainTerminee: (m, _t, s, rec) => {
+        if (this.donnees) {
+          try { this.notifierSucces(this.donnees.enregistrerMain(analyserMain(m), rec, s.reglages.tapisDepart)); }
+          catch (e) { console.error('Statistiques', e); }
+        }
+        this.signalerHall();
+      },
+      partieTerminee: (r) => {
+        if (this.donnees) {
+          try { this.notifierSucces(this.donnees.enregistrerPartie(r.classement, r.tapisDepart)); }
+          catch (e) { console.error('Statistiques', e); }
+        }
+        this.signalerHall();
+      },
+      activite: (id, type) => {
+        const u = idUtilisateur(id);
+        if (u === null || !this.donnees) return;
+        const n = this.donnees.activite(u, type);
+        if (n.length) this.notifierSucces(new Map([[u, n]]));
+      },
+      modifiee: (s) => this.planifierSauvegarde(s),
+      vide: (s) => this.supprimer(s),
+    };
+    void salle;
+  }
+
+  private planifierSauvegarde(s: Salle) {
+    if (!this.donnees || this.sauvegardes.has(s.id)) return;
+    this.sauvegardes.set(s.id, setTimeout(() => {
+      this.sauvegardes.delete(s.id);
+      if (this.salles.get(s.id) === s) this.donnees!.sauverSalle(s.exporter());
+    }, 1500));
+  }
 
   get nbSalles() { return this.salles.size; }
   get nbConnectes() { return this.parMembre.size; }
@@ -127,18 +196,8 @@ export class Hall {
         const salleId = randomBytes(6).toString('base64url');
         let code = genererCode();
         while (this.parCode.has(code)) code = genererCode();
-        const s = new Salle({
-          id: salleId, code, hote: membre(u), reglages: r,
-          sortie: {
-            envoyer: (dest, m) => {
-              if (m.type === 'exclu') { this.ouEst.delete(dest); this.envoyerMembre(dest, { type: 'sorti', raison: "L'hôte t'a exclu de la table" }); return; }
-              this.envoyerMembre(dest, { type: 'salle', msg: m });
-            },
-            mainTerminee: (m, t, salle) => { this.ecouteurs.mainTerminee?.(m, t, salle); this.signalerHall(); },
-            partieTerminee: (res, salle) => { this.ecouteurs.partieTerminee?.(res, salle); this.signalerHall(); },
-            vide: (salle) => this.supprimer(salle),
-          },
-        });
+        const s: Salle = new Salle({ id: salleId, code, hote: membre(u), reglages: r, sortie: this.sortie(() => s) });
+        this.planifierSauvegarde(s);
         this.salles.set(salleId, s);
         this.parCode.set(code, s);
         this.ouEst.set(id, salleId);
@@ -196,6 +255,9 @@ export class Hall {
 
   private supprimer(s: Salle) {
     s.arreter();
+    this.donnees?.supprimerSalle(s.id);
+    const h = this.sauvegardes.get(s.id);
+    if (h) { clearTimeout(h); this.sauvegardes.delete(s.id); }
     this.salles.delete(s.id);
     this.parCode.delete(s.code);
     for (const [m, sid] of this.ouEst) if (sid === s.id) this.ouEst.delete(m);
@@ -223,7 +285,10 @@ export class Hall {
   }
 
   arreter() {
-    for (const s of this.salles.values()) s.arreter();
+    // Sauvegarde finale de toutes les tables avant l'arrêt
+    for (const s of this.salles.values()) { s.arreter(); this.donnees?.sauverSalle(s.exporter()); }
+    for (const h of this.sauvegardes.values()) clearTimeout(h);
+    clearInterval(this.menage);
     if (this.hallEnAttente) clearTimeout(this.hallEnAttente);
   }
 }

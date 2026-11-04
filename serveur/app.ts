@@ -11,6 +11,8 @@ import { Comptes, ErreurCompte, Utilisateur } from './comptes.js';
 import { Hall } from './hall.js';
 import { Courriel } from './courriel.js';
 import { AVATARS } from '../moteur/avatars.js';
+import { listeSucces, CADRES, DOS } from '../moteur/succes.js';
+import { Donnees } from './donnees.js';
 
 export const VERSION = '0.2.0';
 
@@ -40,7 +42,9 @@ function limiteur(max: number, fenetreMs: number) {
 export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyInstance; hall: Hall; comptes: Comptes }> {
   const app = Fastify({ logger: o.journal ? { level: 'info', redact: ['req.headers.authorization'] } : false, trustProxy: true, bodyLimit: 32 * 1024 });
   const comptes = new Comptes(o.db);
-  const hall = new Hall();
+  const donnees = new Donnees(o.db);
+  const hall = new Hall(donnees);
+  hall.restaurer();
   const limiteAuth = limiteur(10, 5 * 60_000);
   const limiteMail = limiteur(3, 15 * 60_000);
 
@@ -72,6 +76,25 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
 
   app.get('/api/avatars', async () => AVATARS);
 
+  app.get('/api/succes', async () => ({ succes: listeSucces(), cadres: CADRES, dos: DOS }));
+
+  app.get('/api/joueurs', async (req) => { exigerUtilisateur(req); return { joueurs: donnees.joueurs() }; });
+
+  app.get('/api/joueurs/:pseudo', async (req) => {
+    exigerUtilisateur(req);
+    const u = comptes.parPseudo(String((req.params as any).pseudo ?? ''));
+    if (!u) throw new ErreurCompte('Joueur introuvable', 404);
+    return {
+      joueur: { pseudo: u.pseudo, avatar: u.avatar, cadre: u.cadre, cree: u.cree },
+      stats: donnees.stats(u.id),
+      succes: donnees.succesObtenus(u.id),
+    };
+  });
+
+  app.get('/api/mes-mains', async (req) => ({ mains: donnees.mesMains(exigerUtilisateur(req).id) }));
+
+  app.get('/api/moi/recompenses', async (req) => donnees.recompenses(exigerUtilisateur(req).id));
+
   app.post('/api/inscription', async (req) => {
     verifierLimite(req, limiteAuth);
     const b = (req.body ?? {}) as any;
@@ -95,6 +118,10 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   app.patch('/api/moi', async (req) => {
     const u = exigerUtilisateur(req);
     const b = (req.body ?? {}) as any;
+    if (b.cadre !== undefined || b.dos !== undefined) {
+      try { donnees.choisirCosmetiques(u.id, { cadre: b.cadre, dos: b.dos }); }
+      catch (e) { throw new ErreurCompte((e as Error).message); }
+    }
     const maj = comptes.modifier(u.id, { avatar: b.avatar, email: b.email, toujoursMontrer: b.toujoursMontrer });
     hall.majUtilisateur(maj);
     return { utilisateur: maj };

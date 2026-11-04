@@ -143,3 +143,58 @@ describe('Serveur', () => {
     expect(refus).toBeGreaterThan(0);
   });
 });
+
+describe('Serveur : succès, profils, historique, redémarrage', () => {
+  it('une table survit au redémarrage du serveur, avec stats et succès', async () => {
+    const { mkdtempSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+    const fichier = join(mkdtempSync(join(tmpdir(), 'aic-')), 'base.db');
+    const demarrer = async () => {
+      const { app } = await creerServeur({ db: ouvrirBase(fichier), courriel: { actif: false, envoyer: async () => {} } });
+      await app.listen({ port: 0, host: '127.0.0.1' });
+      url = `http://127.0.0.1:${(app.server.address() as any).port}`;
+      return app;
+    };
+    let app = await demarrer();
+    const a = await api('/api/inscription', { pseudo: 'Persistant', mdp: 'motdepasse1' });
+    const j = new Joueur(a.corps.jeton);
+    await j.connecter();
+    j.envoyer({ type: 'creer', reglages: { bots: 2, niveauBots: 'facile', tempsReflexion: 0 } });
+    const entre = (await j.attendre((m) => m.type === 'entre')) as any;
+    j.envoyer({ type: 'cmd', cmd: { c: 'lancer' } });
+    const stop = j.pilotage();
+    await j.attendre((m) => m.type === 'succes' && m.succes.some((s) => s.id === 'premiere-donne'), 40_000);
+    await j.attendre((m) => m.type === 'salle' && m.msg.type === 'maj' && m.msg.etat.numeroMain >= 3 && !m.msg.etat.mainEnCours, 60_000);
+    stop();
+    const tapisAvant = j.dernierEtat()!.sieges.filter(Boolean).reduce((s, x) => s + x!.tapis, 0);
+
+    const profil = await api('/api/joueurs/Persistant', undefined, a.corps.jeton, 'GET');
+    expect(profil.corps.stats.mains).toBeGreaterThanOrEqual(2);
+    expect(profil.corps.succes.map((s: any) => s.id)).toContain('premiere-donne');
+    const mains = await api('/api/mes-mains', undefined, a.corps.jeton, 'GET');
+    expect(mains.corps.mains.length).toBeGreaterThanOrEqual(2);
+    const liste = await api('/api/joueurs', undefined, a.corps.jeton, 'GET');
+    expect(liste.corps.joueurs.find((x: any) => x.pseudo === 'Persistant').mains).toBeGreaterThanOrEqual(2);
+    const succes = await api('/api/succes', undefined, undefined, 'GET');
+    expect(succes.corps.succes).toHaveLength(25);
+
+    // Redémarrage
+    j.ws.close();
+    await app.close();
+    app = await demarrer();
+    const j2 = new Joueur(a.corps.jeton);
+    await j2.connecter();
+    const b = j2.recus.find((m) => m.type === 'bienvenue') as any;
+    expect(b.salle).toBe(entre.id);
+    await j2.attendre((m) => m.type === 'salle' && m.msg.type === 'maj');
+    const e = j2.dernierEtat()!;
+    expect(e.statut).toBe('pause');
+    expect(e.sieges.filter(Boolean)).toHaveLength(3);
+    expect(e.sieges.filter(Boolean).reduce((s, x) => s + x!.tapis, 0)).toBe(tapisAvant);
+    j2.envoyer({ type: 'cmd', cmd: { c: 'reprendre' } });
+    await j2.attendre((m) => m.type === 'salle' && m.msg.type === 'maj' && m.msg.etat.statut === 'en_jeu');
+    j2.ws.close();
+    await app.close();
+  }, 120_000);
+});

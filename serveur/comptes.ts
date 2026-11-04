@@ -16,6 +16,8 @@ export interface Utilisateur {
   avatar: AvatarId;
   toujoursMontrer: boolean;
   cree: number;
+  cadre: string;
+  dos: string;
 }
 
 export class ErreurCompte extends Error {
@@ -46,6 +48,7 @@ function ligneVersUtilisateur(r: any): Utilisateur {
   return {
     id: Number(r.id), pseudo: String(r.pseudo), email: r.email ? String(r.email) : null,
     avatar: estAvatar(r.avatar) ? r.avatar : 'renard', toujoursMontrer: !!r.toujours_montrer, cree: Number(r.cree),
+    cadre: r.cadre ? String(r.cadre) : 'aucun', dos: r.dos ? String(r.dos) : 'prune',
   };
 }
 
