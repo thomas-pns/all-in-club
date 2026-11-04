@@ -92,3 +92,59 @@ export function ouvrirReglagesPerso(surToujoursMontrer?: (oui: boolean) => void)
     if (cle === 'toujoursMontrer') surToujoursMontrer?.(v);
   }));
 }
+
+/* ------------------------------ Listes déroulantes du jeu ------------------------------ */
+
+/**
+ * Remplace l'affichage des <select> natifs (bordures blanches, style du système) par un menu
+ * aux couleurs du jeu. Le <select> reste dans la page, caché : les formulaires le lisent comme avant.
+ */
+function embellir(select: HTMLSelectElement) {
+  if (select.dataset.embelli) return;
+  select.dataset.embelli = '1';
+  const bouton = document.createElement('button');
+  bouton.type = 'button';
+  bouton.className = 'liste-jeu';
+  bouton.setAttribute('aria-haspopup', 'listbox');
+  select.classList.add('select-cache');
+  select.insertAdjacentElement('afterend', bouton);
+  const maj = () => { bouton.innerHTML = `<span>${esc(select.selectedOptions[0]?.textContent ?? '')}</span><i>▾</i>`; };
+  maj();
+  select.addEventListener('change', maj);
+
+  bouton.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelector('.menu-liste')?.remove();
+    const r = bouton.getBoundingClientRect();
+    const menu = html(`<div class="menu-liste" role="listbox">${[...select.options].map((o, i) =>
+      `<button type="button" role="option" data-i="${i}" class="${o.selected ? 'on' : ''}">${esc(o.textContent)}</button>`).join('')}</div>`);
+    document.body.appendChild(menu);
+    // Sous le bouton, ou au-dessus s'il n'y a pas la place
+    const h = Math.min(menu.scrollHeight, 320);
+    const enHaut = r.bottom + h + 12 > window.innerHeight && r.top > h + 12;
+    Object.assign(menu.style, { left: `${Math.max(8, Math.min(r.left, window.innerWidth - Math.max(r.width, 160) - 8))}px`, width: `${Math.max(r.width, 160)}px`, top: enHaut ? `${r.top - h - 6}px` : `${r.bottom + 6}px`, maxHeight: '320px' });
+    (menu.querySelector('.on') as HTMLElement | null)?.scrollIntoView({ block: 'nearest' });
+    const fermer = () => { menu.remove(); document.removeEventListener('pointerdown', dehors, true); document.removeEventListener('keydown', clavier, true); };
+    const dehors = (ev: Event) => { if (!menu.contains(ev.target as Node) && ev.target !== bouton && !bouton.contains(ev.target as Node)) fermer(); };
+    const clavier = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); fermer(); bouton.focus(); } };
+    document.addEventListener('pointerdown', dehors, true);
+    document.addEventListener('keydown', clavier, true);
+    menu.addEventListener('click', (ev) => {
+      const b = (ev.target as HTMLElement).closest('[data-i]') as HTMLElement | null;
+      if (!b) return;
+      select.selectedIndex = Number(b.dataset.i);
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      fermer();
+    });
+  });
+}
+
+// Tous les <select> ajoutés à la page sont embellis automatiquement.
+if (typeof document !== 'undefined') {
+  const tout = (racine: ParentNode) => racine.querySelectorAll?.('select:not([data-embelli])').forEach((s) => embellir(s as HTMLSelectElement));
+  new MutationObserver((ms) => { for (const m of ms) m.addedNodes.forEach((n) => { if (n instanceof HTMLElement) { if (n.tagName === 'SELECT') embellir(n as HTMLSelectElement); else tout(n); } }); })
+    .observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('DOMContentLoaded', () => tout(document));
+  // Fermer le menu ouvert si la page défile ou change de taille
+  window.addEventListener('resize', () => document.querySelector('.menu-liste')?.remove());
+}

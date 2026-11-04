@@ -123,11 +123,12 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 3px; }
 .barre-haut .espace { flex: 1; }
 .btn-rond { width: 44px; height: 44px; border-radius: 50%; padding: 0; font-size: 20px; flex: none; }
 .code { font-family: Fredoka; font-weight: 700; letter-spacing: 2px; background: var(--prune); padding: 3px 10px; border-radius: 10px; cursor: pointer; }
-.zone-scene { flex: 1; position: relative; min-height: 0; background: radial-gradient(ellipse 60% 55% at 50% 48%, rgba(255,217,138,.13), transparent 70%); }
+.zone-scene { flex: 1; position: relative; min-height: 0; }
+.ecran-table { background: radial-gradient(ellipse 55% 50% at 50% 42%, rgba(255,217,138,.12), rgba(255,217,138,0) 100%); }
 .zone-scene canvas { position: absolute; inset: 0; display: block; }
 
 .barre-actions {
-  flex: none; background: linear-gradient(rgba(35,26,59,0), rgba(20,14,36,.55) 30%); padding: 8px calc(10px + var(--droite)) calc(10px + var(--bas)) calc(10px + var(--gauche));
+  flex: none; padding: 8px calc(10px + var(--droite)) calc(10px + var(--bas)) calc(10px + var(--gauche));
   display: flex; flex-direction: column; gap: 8px; z-index: 3; justify-content: flex-end;
   height: calc(196px + var(--bas)); overflow: hidden;
   max-width: 980px; width: 100%; margin: 0 auto;
@@ -343,3 +344,27 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 3px; }
 .annonce-succes b { font-family: Fredoka; font-size: 20px; display: block; }
 .annonce-succes span { font-size: 13px; font-weight: 700; }
 @keyframes succes { from { transform: translate(-50%, -40px) scale(.6); opacity: 0; } }
+
+/* ---------- Listes déroulantes du jeu ---------- */
+select.select-cache { position: absolute !important; opacity: 0; pointer-events: none; width: 1px !important; height: 1px; padding: 0; border: 0; }
+.liste-jeu {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer;
+  font-family: Fredoka, Nunito, sans-serif; font-weight: 600; font-size: 17px; color: var(--creme); text-align: left;
+  background: linear-gradient(#45386B, #362a58); border: 3px solid var(--trait); border-radius: 14px; padding: 10px 14px 11px;
+  box-shadow: 0 4px 0 var(--trait), inset 0 2px 0 rgba(255,255,255,.08); transition: transform .06s, box-shadow .06s, filter .12s;
+}
+.liste-jeu:hover { filter: brightness(1.1); }
+.liste-jeu:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--trait); }
+.liste-jeu span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.liste-jeu i { font-style: normal; color: var(--or); font-size: 16px; flex: none; }
+.menu-liste {
+  position: fixed; z-index: 100; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding: 6px;
+  background: #2b2148; border: 3px solid var(--trait); border-radius: 16px; box-shadow: 0 10px 0 rgba(0,0,0,.35), 0 18px 40px rgba(0,0,0,.4);
+  animation: apparait .12s ease-out;
+}
+.menu-liste button {
+  font-family: Fredoka, Nunito, sans-serif; font-weight: 600; font-size: 16px; color: var(--creme); text-align: left; cursor: pointer;
+  background: transparent; border: 0; border-radius: 10px; padding: 9px 12px;
+}
+.menu-liste button:hover { background: #45386B; }
+.menu-liste button.on { background: linear-gradient(#FFD25E, #F2A516); color: var(--trait); }

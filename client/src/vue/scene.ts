@@ -299,12 +299,7 @@ export class Scene {
       x.beginPath();
       x.roundRect(dx, dy, w, h, r);
     };
-    // Lumière de la lampe
-    // (rayon assez court pour s'éteindre avant les bords : pas de rectangle visible)
-    const lampe = x.createRadialGradient(g.cx, g.cy, 0, g.cx, g.cy, Math.min(g.W, g.H) * 0.55);
-    lampe.addColorStop(0, 'rgba(255,217,138,0.28)');
-    lampe.addColorStop(1, 'rgba(255,217,138,0)');
-    x.fillStyle = lampe; x.fillRect(0, 0, g.W, g.H);
+    // (La lumière de la lampe est dans le fond CSS de l'écran : aucun bord visible.)
     // Ombre, bois, feutre
     x.save(); x.filter = 'blur(18px)'; stade(f.x - 40, f.y - 10, f.w + 80, f.h + 80); x.fillStyle = 'rgba(0,0,0,0.45)'; x.fill(); x.restore();
     const bois = x.createLinearGradient(0, f.y - 40, 0, f.y + f.h + 40);
