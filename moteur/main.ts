@@ -17,6 +17,7 @@ export interface JoueurMain {
   siege: number;
   id: string;
   tapis: number;          // jetons devant le joueur (hors mises)
+  tapisDepart: number;    // tapis au début de la main (avant les blindes)
   cartes: Carte[];
   miseTour: number;       // misé pendant le tour d'enchères en cours
   miseTotale: number;     // misé pendant toute la main (hors argent mort)
@@ -125,7 +126,7 @@ export function demarrerMain(params: ParamsMain): EtatMain {
       .slice()
       .sort((a, b) => a.siege - b.siege)
       .map((p) => ({
-        siege: p.siege, id: p.id, tapis: p.tapis, cartes: [], miseTour: 0, miseTotale: 0,
+        siege: p.siege, id: p.id, tapis: p.tapis, tapisDepart: p.tapis, cartes: [], miseTour: 0, miseTotale: 0,
         couche: false, aTapis: p.tapis === 0, aParle: false, niveauVu: 0, toujoursMontrer: !!p.toujoursMontrer,
       })),
     bouton: params.bouton,

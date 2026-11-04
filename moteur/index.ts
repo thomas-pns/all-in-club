@@ -6,3 +6,5 @@ export * from './bots.js';
 export * from './avatars.js';
 export * from './rythme.js';
 export * from './salle.js';
+export * from './analyse.js';
+export * from './succes.js';
