@@ -62,7 +62,7 @@ function geometrie(d: Disposition): Geo {
 
 /* ------------------------------ Piles de jetons ------------------------------ */
 
-class PileJetons extends Container {
+export class PileJetons extends Container {
   private g = new Graphics();
   private etiquette = new Container();
   private fondEtiquette = new Graphics();
@@ -126,7 +126,7 @@ interface VueSiegeScene {
   clin: boolean;
 }
 
-function pastille(texte: string, fond: number, couleur: number, taille = 17): Container {
+export function pastille(texte: string, fond: number, couleur: number, taille = 17): Container {
   const c = new Container();
   const t = new Text({ text: texte, style: new TextStyle({ fontFamily: POLICE, fontWeight: '700', fontSize: taille, fill: couleur }) });
   t.anchor.set(0.5);

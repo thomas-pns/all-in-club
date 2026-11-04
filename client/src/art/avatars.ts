@@ -117,7 +117,7 @@ function extras(v: Visage, ex: Expression): string {
 
 const contour = `stroke="${T}" stroke-width="5" stroke-linejoin="round"`;
 
-const PERSOS: Record<AvatarId, Perso> = {
+const PERSOS: Record<AvatarId | 'croupier', Perso> = {
   renard: {
     fond: '#FFC23D', visage: { ey: 104, dx: 23, my: 146 },
     derriere: () => `
@@ -239,6 +239,18 @@ const PERSOS: Record<AvatarId, Perso> = {
       <path d="M36,120 Q30,40 100,36 Q170,40 164,120 Q160,156 100,158 Q40,156 36,120Z" fill="#FF7FB0" ${contour}/>
       <circle cx="72" cy="66" r="9" fill="#FFB3D1"/><circle cx="128" cy="60" r="6" fill="#FFB3D1"/><circle cx="114" cy="78" r="4" fill="#FFB3D1"/>`,
   },
+  croupier: {
+    fond: '#43B072', visage: { ey: 108, dx: 21, my: 150, sourcil: '#2A1E3F' },
+    derriere: () => `
+      <path d="M58,186 L100,160 L142,186 Z" fill="#FFF4DF" stroke="${T}" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M40,200 Q48,168 76,164 L100,184 L124,164 Q152,168 160,200 Z" fill="#2A1E3F"/>
+      <path d="M84,170 L100,178 L84,186 Z M116,170 L100,178 L116,186 Z" fill="#E5484D" stroke="${T}" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="100" cy="178" r="5" fill="#C2363B" stroke="${T}" stroke-width="2.5"/>
+      <circle cx="47" cy="118" r="10" fill="#F1C4A0" stroke="${T}" stroke-width="4"/><circle cx="153" cy="118" r="10" fill="#F1C4A0" stroke="${T}" stroke-width="4"/>
+      <ellipse cx="100" cy="116" rx="54" ry="56" fill="#F1C4A0" stroke="${T}" stroke-width="5"/>
+      <path d="M46,104 Q42,56 96,52 Q150,50 156,100 Q140,74 112,72 Q118,82 104,84 Q84,70 60,84 Q50,92 46,104 Z" fill="#3B2A22" stroke="${T}" stroke-width="4" stroke-linejoin="round"/>
+      <ellipse cx="100" cy="132" rx="7" ry="5" fill="#E2A783"/>`,
+  },
   croco: {
     fond: '#FF6B5B', visage: { ey: 72, dx: 30, my: 156, sclere: '#FFF4DF' },
     derriere: () => `
@@ -254,14 +266,14 @@ const PERSOS: Record<AvatarId, Perso> = {
 };
 
 /** Fond de médaillon de chaque personnage. */
-export const couleurFond = (id: AvatarId) => PERSOS[id].fond;
+export const couleurFond = (id: AvatarId | 'croupier') => PERSOS[id].fond;
 
 let compteur = 0;
 /**
  * SVG d'un avatar.
  * @param anneau proportion d'anneau de temps (0..1) ou null
  */
-export function avatarSVG(id: AvatarId, ex: Expression = 'neutre', taille = 120, opts: { gris?: boolean; cadre?: string } = {}): string {
+export function avatarSVG(id: AvatarId | 'croupier', ex: Expression = 'neutre', taille = 120, opts: { gris?: boolean; cadre?: string } = {}): string {
   const p = PERSOS[id] ?? PERSOS.renard;
   const v = p.visage;
   const clip = `cl${++compteur}`;

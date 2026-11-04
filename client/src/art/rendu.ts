@@ -25,7 +25,7 @@ export function svgVersImage(svg: string): Promise<HTMLImageElement> {
   return img.decode().then(() => img);
 }
 
-export function textureAvatar(id: AvatarId, ex: Expression, gris = false, cadre = 'aucun'): Promise<Texture> {
+export function textureAvatar(id: AvatarId | 'croupier', ex: Expression, gris = false, cadre = 'aucun'): Promise<Texture> {
   const cle = `${id}:${ex}:${gris}:${cadre}`;
   let p = cacheAvatars.get(cle);
   if (!p) {

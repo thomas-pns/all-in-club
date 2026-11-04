@@ -433,9 +433,12 @@ export class SalleBJ {
     this.evenements.push({ t: 'nouvelleManche', numero: this.numeroManche });
     for (const j of this.joueurs.values()) { j.pret = false; j.mise = Math.min(j.mise || this.reglages.miseMin, j.tapis); }
     const debut = this.horloge.maintenant() + dureeBJ(this.evenements);
-    this.echeance = debut + TEMPS_MISES;
     this.occupeJusqua = debut;
-    this.programmer(() => this.distribuer(), this.echeance - this.horloge.maintenant());
+    // Temps illimité (solo notamment) : on attend que chacun ait misé ou passé
+    if (this.reglages.tempsReflexion > 0) {
+      this.echeance = debut + TEMPS_MISES;
+      this.programmer(() => this.distribuer(), this.echeance - this.horloge.maintenant());
+    } else this.echeance = null;
     this.diffuser();
     this.sortie.modifiee?.(this);
   }

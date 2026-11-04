@@ -1,13 +1,15 @@
 # All-In Club
 
-Poker Texas Hold'em No-Limit en cash game, entre amis, dans un style cartoon coloré et chaleureux.
-Tables de 6 joueurs maximum, bots facultatifs, mode solo hors ligne. Hébergé sur un NAS Synology.
+Un casino entre potes, dans un style cartoon coloré et chaleureux : **Poker** Texas Hold'em No-Limit en cash game
+et **Black Jack** (tous contre le croupier). Tables de 6 joueurs maximum, bots facultatifs au poker, mode solo
+hors ligne. Hébergé sur un NAS Synology.
 
 > Le cahier des charges complet est dans [`PROMPT.md`](PROMPT.md). Déploiement sur le NAS : [`DEPLOIEMENT.md`](DEPLOIEMENT.md).
 > **État actuel : jalons 1 à 4 terminés.** Moteur de règles, bots, multijoueur en ligne (comptes, hall, tables
 > publiques/privées), table animée PixiJS (12 personnages), mode solo hors ligne, chat et 12 émotes, historique
 > avec lecteur pas à pas, statistiques, 25 succès (cadres et dos de cartes à débloquer), tables restaurées après
-> un redémarrage du serveur.
+> un redémarrage du serveur. **Black Jack** : 6 jeux de cartes, Black Jack payé 3 contre 2, croupier qui s'arrête
+à 17, assurance, doubler, séparer, abandon, bouton « Conseil » (stratégie de base) et règles expliquées en jeu.
 
 ## Lancer en développement
 
@@ -49,7 +51,7 @@ nouveau venu qui attend la grosse blinde ou la paie pour entrer.
 
 ```bash
 npm install
-npm test          # 71 tests, dont 100 000 mains aléatoires simulées et une partie en ligne de bout en bout
+npm test          # 87 tests, dont 100 000 mains aléatoires simulées et une partie en ligne de bout en bout
 npm run typecheck
 ```
 
