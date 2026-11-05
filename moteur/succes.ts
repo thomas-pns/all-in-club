@@ -95,7 +95,7 @@ export const SUCCES: DefinitionSucces[] = [
   { id: 'premiere-donne', titre: 'Première donne', description: 'Jouer sa première main', icone: '🃏', test: (c) => c.stats.mains >= 1 },
   { id: 'habitue', titre: 'Habitué du club', description: 'Jouer 100 mains', icone: '🪑', recompense: { type: 'dos', id: 'ocean', nom: 'Océan' }, test: (c) => c.stats.mains >= 100 },
   { id: 'marathon', titre: 'Marathon', description: 'Jouer 1 000 mains', icone: '🏃', recompense: { type: 'cadre', id: 'neon', nom: 'Néon' }, test: (c) => c.stats.mains >= 1000 },
-  { id: 'premier-pot', titre: 'Premier pot', description: 'Gagner un pot', icone: '🪙', recompense: { type: 'dos', id: 'corail', nom: 'Corail' }, test: (c) => c.stats.potsGagnes >= 1 },
+  { id: 'premier-pot', titre: 'Premier pot', description: 'Gagner un pot', icone: '🍯', recompense: { type: 'dos', id: 'corail', nom: 'Corail' }, test: (c) => c.stats.potsGagnes >= 1 },
   { id: 'collectionneur', titre: 'Collectionneur', description: 'Gagner 100 pots', icone: '💰', recompense: { type: 'cadre', id: 'argent', nom: 'Argent' }, test: (c) => c.stats.potsGagnes >= 100 },
   { id: 'gros-poisson', titre: 'Gros poisson', description: 'Gagner un pot de plus de 5 tapis de départ', icone: '🐟', test: (c) => !!c.main && c.main.potGagne > 5 * c.main.tapisDepartTable },
   { id: 'double-ou-rien', titre: 'Double ou rien', description: 'Gagner un pot en étant à tapis', icone: '🎲', test: (c) => c.stats.tapisGagnes >= 1 },

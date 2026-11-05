@@ -183,7 +183,7 @@ export class EcranHall {
       const derniers = p.succes.slice().sort((a, b) => b.date - a.date).slice(0, 3)
         .map((x) => d.succes.find((y) => y.id === x.id)).filter(Boolean) as DefSucces[];
       $('[data-succes]', this.el).innerHTML = derniers.length
-        ? `<div class="doux petit" style="margin-bottom:6px">Derniers succès · ${p.succes.length}/${d.succes.length}</div>${derniers.map((x) => `<div class="succes-mini"><span>${x.icone}</span>${esc(x.titre)}</div>`).join('')}`
+        ? `<div class="doux petit" style="margin-bottom:6px">Derniers succès · ${p.succes.length}/${d.succes.length}</div>${derniers.map((x) => `<div class="succes-mini"><span>${x.icone}</span><div>${esc(x.titre)}<small>${esc(x.description)}</small></div></div>`).join('')}`
         : '<div class="doux petit">Joue ta première main pour débloquer un succès !</div>';
     } catch { $('[data-stats]', this.el).innerHTML = ''; }
   }

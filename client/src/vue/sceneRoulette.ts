@@ -37,9 +37,9 @@ const geometrie = (portrait: boolean): Geo => portrait
   ? { W: 900, H: 1430, roue: { x: 800, y: 96, r: 84 }, roueGrande: { x: 450, y: 640, r: 405 }, croupier: { x: 62, y: 74, taille: 92 },
       tapis: { vertical: true, x0: 875, y0: 198, cw: 170, ch: 72 }, histo: { x: 122, y: 54, w: 580, h: 42 },
       ySieges: 1328, xSieges: [80, 820], avatar: 80 }
-  : { W: 1600, H: 900, roue: { x: 330, y: 452, r: 262 }, croupier: { x: 96, y: 96, taille: 108 },
-      tapis: { vertical: false, x0: 655, y0: 196, cw: 64, ch: 76 }, histo: { x: 655, y: 86, w: 896, h: 44 },
-      ySieges: 752, xSieges: [700, 1510], avatar: 92 };
+  : { W: 1600, H: 900, roue: { x: 340, y: 424, r: 292 }, croupier: { x: 92, y: 92, taille: 104 },
+      tapis: { vertical: false, x0: 682, y0: 222, cw: 62, ch: 76 }, histo: { x: 682, y: 112, w: 868, h: 44 },
+      ySieges: 772, xSieges: [720, 1500], avatar: 88 };
 
 /* ------------------------------ Repère du tapis ------------------------------ */
 
@@ -340,9 +340,9 @@ export class SceneRoulette {
       const { c, r: rg } = caseNumero(n);
       const r = caseR(c, rg, c + 1, rg + 1);
       cadre(r);
-      const rr = Math.min(r.w, r.h) * 0.4;
+      const rr = Math.min(r.w, r.h) * 0.41;
       x.fillStyle = couleurNumero(n) === 'rouge' ? ROUGE_C : NOIR_C;
-      x.beginPath(); x.ellipse(r.x + r.w / 2, r.y + r.h / 2, g.tapis.vertical ? rr * 1.6 : rr * 0.95, g.tapis.vertical ? rr * 1.08 : rr * 1.15, 0, 0, Math.PI * 2); x.fill();
+      x.beginPath(); x.arc(r.x + r.w / 2, r.y + r.h / 2, rr, 0, Math.PI * 2); x.fill();
       x.strokeStyle = 'rgba(255,255,255,.5)'; x.lineWidth = 1.5; x.stroke();
       texte(String(n), r.x + r.w / 2, r.y + r.h / 2, tn * (g.tapis.vertical ? 0.52 : 0.42));
     }
