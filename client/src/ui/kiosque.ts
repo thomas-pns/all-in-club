@@ -3,11 +3,11 @@
  * Tout s'affiche dans la zone de contenu du Club (le portefeuille et les onglets restent visibles).
  */
 import type { TypeTicket } from '../../../moteur/kiosque';
-import { KENO, KENO_GAINS, LOTO, LOTO_GAINS, motForme, lignesMorpion, SymboleMorpion } from '../../../moteur/kiosque';
+import { TICKETS, tauxRetour, KENO, KENO_GAINS, LOTO, LOTO_GAINS, motForme, lignesMorpion, SymboleMorpion } from '../../../moteur/kiosque';
 import { api, ErreurApi } from '../reseau';
 import { fmt } from '../art/rendu';
 import { jouerSon } from '../vue/son';
-import { $, $$, esc, html, toast } from './commun';
+import { $, $$, esc, html, toast, panneau } from './commun';
 
 export interface EtatPortefeuille { solde: number; tickets: number }
 
@@ -79,22 +79,40 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
   const def = TICKETS_VITRINE.find((t) => t.type === type)!;
   c.innerHTML = `<div class="vue-ticket">
     <div class="ligne" style="gap:10px;margin-bottom:12px"><button class="btn btn-rond btn-fantome" data-retour aria-label="Retour au Kiosque">←</button><h1 style="font-size:24px">${def.nom}</h1></div>
-    <div data-ticket-zone><div class="vide-liste">Le buraliste prépare ton ticket…</div></div>
+    <div data-ticket-zone></div>
     <div data-resultat></div>
     <div class="actions-ticket" data-actions></div>
   </div>`;
   $('[data-retour]', c).onclick = () => ctx.aller('kiosque');
   let gratuitCourant = offert;
-  void acheter();
+  presenter(offert);
 
-  async function acheter(gratuit = offert) {
+  /** Le ticket encore emballé : rien n'est débité tant qu'on n'a pas appuyé sur « Jouer ». */
+  function presenter(gratuit: boolean) {
     gratuitCourant = gratuit;
     $('[data-resultat]', c).innerHTML = '';
-    $('[data-actions]', c).innerHTML = '';
+    $('[data-ticket-zone]', c).innerHTML = `<div class="ticket-grand t-${type} emballe">
+      <div class="entete-ticket"><b>${def.nom}</b><span class="prix">${gratuit ? 'offert' : clubs(def.prix)}</span></div>
+      <p class="regle-ticket">${regle(type)}</p>
+      <div class="jeu-ticket">${contenuHTML(exemple(type))}</div>
+      ${type === 'mots' ? '<div class="liste-mots"><span class="attente-mots">Tes 6 mots s\'affichent ici</span></div>' : ''}
+      <div class="pied-ticket"><small>Lot maximal ${clubs(def.max)}</small><small>n° ——————</small></div>
+    </div>`;
+    const solde = ctx.porte()?.solde ?? 0, assez = gratuit || solde >= def.prix;
+    $('[data-actions]', c).innerHTML = `<button class="btn" data-regles>Règles</button>
+      <button class="btn btn-or" data-jouer ${assez ? '' : 'disabled'}>${gratuit ? 'Jouer (offert)' : assez ? `Jouer · ${clubs(def.prix)}` : 'Pas assez de Clubs'}</button>`;
+    $('[data-regles]', c).onclick = () => ouvrirReglesTicket(type);
+    $('[data-jouer]', c).onclick = () => void acheter(gratuit);
+  }
+
+  async function acheter(gratuit: boolean) {
+    gratuitCourant = gratuit;
+    const bj = $('[data-jouer]', c) as HTMLButtonElement | null; if (bj) bj.disabled = true;
     let r: ReponseTicket;
     try { r = await api<ReponseTicket>('/api/kiosque/ticket', { type, offert: gratuit }); }
-    catch (e) { erreur(e); ctx.aller('kiosque'); return; }
+    catch (e) { erreur(e); if (bj) bj.disabled = false; return; }
     if (!c.isConnected) return;
+    jouerSon('jeton');
     // Le gain est déjà crédité côté serveur : on garde le suspense jusqu'au grattage
     ctx.majPorte(r.etat, r.etat.solde - r.gain);
     afficherTicket(r);
@@ -103,27 +121,22 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
   function afficherTicket(r: ReponseTicket) {
     const zone = $('[data-ticket-zone]', c);
     zone.innerHTML = `<div class="ticket-grand t-${type}">
-      <div class="entete-ticket"><b>${def.nom}</b><span class="prix">${gratuitTxt(r)}</span></div>
+      <div class="entete-ticket"><b>${def.nom}</b><span class="prix">${gratuitCourant ? 'offert' : clubs(def.prix)}</span></div>
       <p class="regle-ticket">${regle(type)}</p>
       <div class="jeu-ticket">${contenuHTML(r)}<canvas class="couche-grattage"></canvas></div>
       ${type === 'mots' ? `<div class="liste-mots">${(r.contenu.mots as string[]).map((m) => `<span data-mot="${m}">${m.split('').map((l) => `<i data-l="${l}">${l}</i>`).join('')}</span>`).join('')}</div>` : ''}
       <div class="pied-ticket"><small>Lot maximal ${clubs(def.max)}</small><small>n° ${String(r.id).padStart(6, '0')}</small></div>
     </div>`;
-    $('[data-actions]', c).innerHTML = `<button class="btn" data-tout>Tout gratter</button><button class="btn btn-or" data-encore disabled>Un autre (${clubs(def.prix)})</button>`;
+    $('[data-actions]', c).innerHTML = `<button class="btn" data-regles>Règles</button><button class="btn btn-ciel" data-tout>Tout gratter</button>`;
+    $('[data-regles]', c).onclick = () => ouvrirReglesTicket(type);
+    const lettresVues: string[] = [];
     let fini = false;
     const reveler = () => {
       if (fini) return;
       fini = true;
-      const cv = $('canvas', zone) as HTMLCanvasElement;
-      cv.style.transition = 'opacity .5s'; cv.style.opacity = '0';
-      setTimeout(() => cv.remove(), 520);
-      if (type === 'mots') {
-        const lettres = r.contenu.lettres as string[];
-        $$('[data-mot]', zone).forEach((s) => {
-          $$('[data-l]', s).forEach((i) => i.classList.toggle('vu', lettres.includes(i.dataset.l!)));
-          s.classList.toggle('forme', motForme(s.dataset.mot!, lettres));
-        });
-      }
+      const cv = $('canvas', zone) as HTMLCanvasElement | null;
+      if (cv) { cv.style.transition = 'opacity .4s'; cv.style.opacity = '0'; setTimeout(() => cv.remove(), 420); }
+      if (type === 'mots') marquerMots(r.contenu.lettres as string[]);
       if (type === 'morpion') lignesMorpion(r.contenu.grille as SymboleMorpion[]).flat().forEach((i) => $(`[data-case="${i}"]`, zone)?.classList.add('gagnante'));
       if (type === 'numeros') $$('[data-num]', zone).forEach((e) => e.classList.toggle('gagnante', (r.contenu.gagnants as number[]).includes(Number(e.dataset.num))));
       const res = $('[data-resultat]', c);
@@ -137,15 +150,45 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
         jouerSon('parole');
         ctx.majPorte(r.etat);
       }
-      ($('[data-encore]', c) as HTMLButtonElement).disabled = false;
-      ($('[data-tout]', c) as HTMLButtonElement).disabled = true;
+      $('[data-actions]', c).innerHTML = `<button class="btn" data-kiosque>Le Kiosque</button><button class="btn btn-or" data-encore>Un autre ticket</button>`;
+      $('[data-kiosque]', c).onclick = () => ctx.aller('kiosque');
+      $('[data-encore]', c).onclick = () => { const offerts = ctx.porte()?.tickets ?? 0; presenter(type === 'morpion' && offerts > 0); };
+    };
+    /** Mots Croisés : chaque lettre grattée s'allume dans la liste des mots. */
+    const marquerMots = (lettres: string[]) => $$('[data-mot]', zone).forEach((s) => {
+      $$('[data-l]', s).forEach((i) => i.classList.toggle('vu', lettres.includes(i.dataset.l!)));
+      s.classList.toggle('forme', motForme(s.dataset.mot!, lettres));
+    });
+    const surZone = (el: HTMLElement) => {
+      el.classList.add('decouvert');
+      if (type === 'mots' && el.dataset.lettre) { lettresVues.push(el.dataset.lettre); marquerMots(lettresVues); }
     };
     $('[data-tout]', c).onclick = reveler;
-    $('[data-encore]', c).onclick = () => { const offerts = ctx.porte()?.tickets ?? 0; void acheter(type === 'morpion' && offerts > 0); };
-    requestAnimationFrame(() => installerGrattage($('canvas', zone) as HTMLCanvasElement, reveler));
+    requestAnimationFrame(() => installerGrattage($('canvas', zone) as HTMLCanvasElement, $$('[data-grat]', zone), surZone, reveler));
   }
+}
 
-  function gratuitTxt(_r: ReponseTicket) { return gratuitCourant ? 'offert' : clubs(def.prix); }
+/** Un ticket « vierge » pour la présentation : la mise en page exacte, sans le contenu. */
+function exemple(type: TypeTicket): ReponseTicket {
+  const contenu = type === 'morpion' ? { lot: 0, grille: Array(9).fill('') }
+    : type === 'numeros' ? { gagnants: [0, 0], mes: Array.from({ length: 8 }, () => ({ n: 0, lot: 0 })) }
+    : { lettres: Array(14).fill(''), mots: [] };
+  return { id: 0, type, gain: 0, contenu, etat: { solde: 0, tickets: 0 } };
+}
+
+/** Les règles d'un ticket, avec le tableau des lots et les chances de les gagner. */
+function ouvrirReglesTicket(type: TypeTicket) {
+  const d = TICKETS[type];
+  const total = d.gains.reduce((s, [, p]) => s + p, 0);
+  const p = panneau(`<h2>${d.nom} · règles</h2>
+    <p>${esc(d.regle)}</p>
+    <p class="doux petit">Gratte les cases argentées au doigt (ou à la souris), une par une. Pressé ? « Tout gratter » découvre tout d'un coup.</p>
+    <table class="table-lots"><thead><tr><th>Lot</th><th>Chance</th></tr></thead><tbody>
+      ${[...d.gains].reverse().map(([g, pr]) => `<tr><td><b>${clubs(g)}</b>${g === d.prix ? ' <small>(remboursé)</small>' : ''}</td><td>1 sur ${fmt(Math.round(1_000_000 / pr))}</td></tr>`).join('')}
+    </tbody></table>
+    <p class="doux petit" style="margin-top:10px">Prix du ticket : ${clubs(d.prix)} · un ticket gagnant sur ${(1_000_000 / total).toFixed(1).replace('.', ',')} · en moyenne, ${Math.round(tauxRetour(d) * 100)} % des mises reviennent aux joueurs.</p>
+    <button class="btn btn-or btn-plein" data-ok>Compris</button>`);
+  $('[data-ok]', p.el).onclick = () => p.fermer();
 }
 
 function regle(type: TypeTicket) {
@@ -157,20 +200,28 @@ function regle(type: TypeTicket) {
 function contenuHTML(r: ReponseTicket): string {
   const ct = r.contenu;
   if (r.type === 'morpion') {
-    return `<div class="lot-morpion"><small>Lot</small><b>${clubs(ct.lot)}</b></div>
-      <div class="grille-morpion">${(ct.grille as string[]).map((s, i) => `<span data-case="${i}" class="${s === '♣' ? 'trefle' : ''}">${s}</span>`).join('')}</div>`;
+    return `<div class="lot-morpion"><small>Lot</small><b data-grat>${ct.lot ? clubs(ct.lot) : ''}</b></div>
+      <div class="grille-morpion">${(ct.grille as string[]).map((s, i) => `<span data-grat data-case="${i}" class="${s === '♣' ? 'trefle' : ''}">${s}</span>`).join('')}</div>`;
   }
   if (r.type === 'numeros') {
-    return `<div class="gagnants"><small>Numéros gagnants</small><span>${(ct.gagnants as number[]).map((n) => `<b>${n}</b>`).join('')}</span></div>
-      <div class="mes-numeros">${(ct.mes as { n: number; lot: number }[]).map((m) => `<span data-num="${m.n}"><b>${m.n}</b><small>${fmt(m.lot)}</small></span>`).join('')}</div>`;
+    return `<div class="gagnants"><small>Numéros gagnants</small><span>${(ct.gagnants as number[]).map((n) => `<b data-grat>${n || ''}</b>`).join('')}</span></div>
+      <div class="mes-numeros">${(ct.mes as { n: number; lot: number }[]).map((m) => `<span data-grat data-num="${m.n}"><b>${m.n || ''}</b><small>${m.lot ? fmt(m.lot) : '&nbsp;'}</small></span>`).join('')}</div>`;
   }
   const lots = [[2, 1_000], [3, 2_500], [4, 6_000], [5, 25_000], [6, 150_000]];
-  return `<div class="mes-lettres">${(ct.lettres as string[]).map((l) => `<span>${l}</span>`).join('')}</div>
+  return `<div class="mes-lettres">${(ct.lettres as string[]).map((l) => `<span data-grat data-lettre="${l}">${l}</span>`).join('')}</div>
     <div class="bareme-mots">${lots.map(([n, g]) => `<span>${n} mots : ${fmt(g)}</span>`).join('')}</div>`;
 }
 
-/** La couche argentée qu'on gratte au doigt (ou à la souris). */
-function installerGrattage(cv: HTMLCanvasElement, fini: () => void) {
+/** Arrondi d'une zone argentée. */
+function rectArrondi(x: CanvasRenderingContext2D, l: number, t: number, w: number, h: number, r: number) {
+  x.beginPath(); x.moveTo(l + r, t); x.arcTo(l + w, t, l + w, t + h, r); x.arcTo(l + w, t + h, l, t + h, r); x.arcTo(l, t + h, l, t, r); x.arcTo(l, t, l + w, t, r); x.closePath();
+}
+
+/**
+ * La couche argentée : seules les cases du ticket sont recouvertes, chacune se gratte au doigt.
+ * Une case grattée à plus de moitié se découvre d'elle-même ; quand toutes le sont, le ticket est fini.
+ */
+function installerGrattage(cv: HTMLCanvasElement, zones: HTMLElement[], surZone: (el: HTMLElement) => void, fini: () => void) {
   if (!cv || !cv.isConnected) return;
   const r = cv.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -181,26 +232,45 @@ function installerGrattage(cv: HTMLCanvasElement, fini: () => void) {
   const m = motif.getContext('2d')!;
   m.fillStyle = '#C9C3D6'; m.fillRect(0, 0, 16, 16);
   m.strokeStyle = '#B5AEC6'; m.lineWidth = 5; m.beginPath(); m.moveTo(-4, 20); m.lineTo(20, -4); m.stroke();
-  x.fillStyle = x.createPattern(motif, 'repeat')!;
-  x.fillRect(0, 0, r.width, r.height);
-  x.fillStyle = 'rgba(58,45,94,.45)'; x.font = '700 15px Fredoka, sans-serif'; x.textAlign = 'center';
-  for (let yy = 26; yy < r.height; yy += 44) for (let xx = (yy / 44) % 2 ? 50 : 20; xx < r.width; xx += 92) x.fillText('♣ GRATTE', xx, yy);
+  const cases = zones.map((el) => {
+    const b = el.getBoundingClientRect();
+    const rayon = parseFloat(getComputedStyle(el).borderRadius) || 10;
+    return { el, l: b.left - r.left, t: b.top - r.top, w: b.width, h: b.height, rayon: Math.min(rayon, b.height / 2, b.width / 2), vu: false };
+  });
+  for (const z of cases) {
+    x.fillStyle = x.createPattern(motif, 'repeat')!;
+    rectArrondi(x, z.l, z.t, z.w, z.h, z.rayon); x.fill();
+    x.strokeStyle = '#A39BB6'; x.lineWidth = 2; x.stroke();
+    x.fillStyle = 'rgba(58,45,94,.4)'; x.font = `700 ${Math.round(Math.min(22, z.h * 0.42))}px Fredoka, sans-serif`;
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('♣', z.l + z.w / 2, z.t + z.h / 2 + 1);
+  }
   x.globalCompositeOperation = 'destination-out';
   let dernier: { x: number; y: number } | null = null, coups = 0, son = 0;
   const gratter = (px: number, py: number) => {
-    x.lineCap = 'round'; x.lineWidth = 34;
+    x.lineCap = 'round'; x.lineWidth = 26;
     x.beginPath();
     if (dernier) { x.moveTo(dernier.x, dernier.y); x.lineTo(px, py); x.stroke(); }
-    x.arc(px, py, 17, 0, Math.PI * 2); x.fill();
+    x.arc(px, py, 13, 0, Math.PI * 2); x.fill();
     dernier = { x: px, y: py };
     const t = performance.now(); if (t - son > 110) { son = t; jouerSon('carte'); }
-    if (++coups % 12 === 0) verifier();
+    if (++coups % 6 === 0) verifier();
   };
   const verifier = () => {
-    const d = x.getImageData(0, 0, cv.width, cv.height).data;
-    let vides = 0, n = 0;
-    for (let i = 3; i < d.length; i += 4 * 40) { n++; if (d[i] < 40) vides++; }
-    if (vides / n > 0.62) fini();
+    for (const z of cases) {
+      if (z.vu) continue;
+      const l = Math.max(0, Math.floor(z.l * dpr)), t = Math.max(0, Math.floor(z.t * dpr));
+      const w = Math.max(1, Math.min(cv.width - l, Math.floor(z.w * dpr))), h = Math.max(1, Math.min(cv.height - t, Math.floor(z.h * dpr)));
+      const d = x.getImageData(l, t, w, h).data;
+      let vides = 0, n = 0;
+      for (let i = 3; i < d.length; i += 4 * 7) { n++; if (d[i] < 40) vides++; }
+      if (vides / n > 0.5) {
+        z.vu = true;
+        x.save(); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.fillStyle = '#000';
+        rectArrondi(x, z.l - 3, z.t - 3, z.w + 6, z.h + 6, z.rayon + 3); x.fill(); x.restore();
+        surZone(z.el);
+      }
+    }
+    if (cases.every((z) => z.vu)) fini();
   };
   const pos = (e: PointerEvent) => { const b = cv.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
   cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); dernier = null; const p = pos(e); gratter(p.x, p.y); });

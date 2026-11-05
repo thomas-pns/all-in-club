@@ -858,3 +858,18 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .bas-lecon .btn { flex: 1; }
 @media (max-width: 420px) { .carte-lecon { width: 34px; height: 48px; } .carte-lecon b { font-size: 15px; } .frise-lecon { grid-template-columns: repeat(2, 1fr); } }
 .legende-lecon > span { display: flex; align-items: center; gap: 8px; }
+
+/* Ticket : présentation avant achat, cases à gratter */
+.ticket-grand.emballe [data-grat] { background: repeating-linear-gradient(135deg, #C9C3D6 0 7px, #B5AEC6 7px 11px) !important; border-color: #A39BB6 !important; color: transparent !important; position: relative; }
+.ticket-grand.emballe [data-grat]::after { content: '♣'; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(58,45,94,.4); font-size: 18px; font-family: Fredoka; }
+.ticket-grand.emballe [data-grat] * { visibility: hidden; }
+.lot-morpion b[data-grat] { min-width: 120px; min-height: 36px; text-align: center; border-radius: 10px; padding: 0 8px; }
+.ticket-grand.emballe .gagnants b { border-color: var(--creme) !important; }
+.attente-mots { grid-column: 1 / -1; text-align: center; opacity: .6; font-weight: 700; }
+.mes-lettres span.decouvert, .mes-numeros span.decouvert, .grille-morpion span.decouvert { animation: tinte .35s ease-out; }
+.table-lots { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.table-lots th { text-align: left; font-size: 13px; color: var(--doux); padding: 4px 8px; }
+.table-lots td { padding: 7px 8px; border-top: 1.5px solid rgba(255,244,223,.12); }
+.table-lots td:last-child { text-align: right; } .table-lots th:last-child { text-align: right; }
+.table-lots small { color: var(--doux); }
+.mes-numeros span b:empty { min-height: 26px; }
