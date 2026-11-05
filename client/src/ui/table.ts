@@ -1,3 +1,4 @@
+import { ouvrirApprendre } from './apprendre';
 /**
  * Écran de table : la scène PixiJS + l'interface HTML (actions, hôte, attente, fin de partie).
  * Fonctionne de la même façon en ligne (WebSocket) et en solo (salle locale).
@@ -515,6 +516,7 @@ export class EcranTable {
         ${hote && !this.canal.casino ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
         <button class="btn" data-m="historique">Historique des mains</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
+        <button class="btn" data-m="regles">Comment jouer ?</button>
         ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}
         ${moi && !moi.absent && e.statut === 'en_jeu' ? '<button class="btn" data-m="absent">M\'absenter</button>' : ''}
         ${moi?.absent ? '<button class="btn" data-m="retour">Je reviens</button>' : ''}
@@ -526,6 +528,7 @@ export class EcranTable {
       switch (b.dataset.m) {
         case 'hote': return this.panneauHote();
         case 'code': return this.copierCode();
+        case 'regles': return ouvrirApprendre('poker');
         case 'reglages': return ouvrirReglagesPerso((oui) => this.canal.envoyer({ c: 'toujoursMontrer', oui }));
         case 'historique': return ouvrirHistorique({
           moi: e.moi,

@@ -2,6 +2,7 @@
  * Écran de roulette : la scène PixiJS + l'interface (jetons, rejouer, prêt, hôte, fin de partie).
  * En ligne (WebSocket) ou en solo (salle locale), comme les autres jeux.
  */
+import { ouvrirApprendre } from './apprendre';
 import type { CommandeRoulette, MessageRoulette, VueRoulette, ReglagesRoulette } from '../../../moteur/roulette/salleRoulette';
 import type { MessageChat } from '../../../moteur/salle';
 import { MISES } from '../../../moteur/roulette/regles';
@@ -212,7 +213,7 @@ export class EcranRoulette {
       ${this.canal.enLigne ? `<div class="doux petit">Code de la table</div><div class="gros-code" data-copier title="Copier">${esc(e.code)}</div>` : ''}
       <p class="doux" style="margin:6px 0 14px">${nb} joueur${nb > 1 ? 's' : ''} sur ${e.reglages.places} · ${fmt(e.reglages.tapisDepart)} jetons chacun${e.reglages.tours ? ` · ${e.reglages.tours} tours` : ''}</p>
       ${hote ? '<button class="btn btn-or" data-lancer>Lancer la partie</button>' : "<p>En attente de l'hôte…</p>"}
-      <p style="margin:12px 0 0"><button class="lien" data-regles2>Jamais joué ? Les règles en 1 minute</button></p>`;
+      <p style="margin:12px 0 0"><button class="lien" data-regles2>Jamais joué ? Apprends en 2 minutes</button></p>`;
     const cp = $('[data-copier]', c); if (cp) cp.onclick = () => this.copierCode();
     const bl = $('[data-lancer]', c); if (bl) bl.onclick = () => { debloquerSon(); this.canal.envoyer({ c: 'lancer' }); };
     $('[data-regles2]', c).onclick = () => ouvrirReglesRoulette();
@@ -478,25 +479,5 @@ export class EcranRoulette {
   }
 }
 
-/** Les règles de la roulette, expliquées simplement. */
-export function ouvrirReglesRoulette() {
-  const p = panneau(`<h2>La roulette en 1 minute</h2>
-    <div class="regles-bj">
-      <p><b>Le but :</b> deviner où la bille va s'arrêter. Le cylindre a 37 cases : de 1 à 36 (rouges ou noires) et le <b>zéro</b>, vert.</p>
-      <p><b>Faites vos jeux :</b> choisis un jeton en bas, puis touche le tapis. Tu peux miser sur autant de cases que tu veux. Quand c'est bon, appuie sur <b>Prêt</b>. Puis le croupier annonce « Rien ne va plus » et lance la bille.</p>
-      <p><b>Plus tu couvres de numéros, moins ça rapporte :</b></p>
-      <ul>
-        <li><b>Plein</b> (un numéro, au milieu d'une case) : 35 fois la mise</li>
-        <li><b>Cheval</b> (à cheval sur la ligne entre deux numéros) : 17 fois</li>
-        <li><b>Transversale</b> (au bord d'une rangée de 3) : 11 fois</li>
-        <li><b>Carré</b> (au coin de 4 numéros) : 8 fois</li>
-        <li><b>Sixain</b> (au bord, entre deux rangées de 3) : 5 fois</li>
-        <li><b>Douzaine</b> ou <b>colonne</b> (« 2 à 1 ») : 2 fois</li>
-        <li><b>Chances simples</b> (rouge / noir, pair / impair, 1-18 / 19-36) : 1 fois</li>
-      </ul>
-      <p><b>La partage :</b> si le zéro sort, les chances simples ne perdent que la moitié de la mise.</p>
-      <p>En bas, le nom de la dernière mise posée et ce qu'elle paie s'affichent. Sur ordinateur, survole le tapis pour voir les numéros couverts. <b>Rejouer</b> remet tes mises du tour d'avant.</p>
-    </div>
-    <button class="btn btn-or btn-plein" data-ok>Faites vos jeux !</button>`);
-  $('[data-ok]', p.el).onclick = () => p.fermer();
-}
+/** Les règles, en petite leçon interactive. */
+export function ouvrirReglesRoulette() { ouvrirApprendre('roulette'); }

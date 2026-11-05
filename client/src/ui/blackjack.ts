@@ -2,6 +2,7 @@
  * Écran de Black Jack : la scène PixiJS + l'interface (mises, décisions, conseil, hôte, fin de partie).
  * Fonctionne en ligne (WebSocket) et en solo (salle locale), comme l'écran de poker.
  */
+import { ouvrirApprendre } from './apprendre';
 import type { CommandeBJ, MessageBJ, VueBJ, ReglagesBJ } from '../../../moteur/blackjack/salleBJ';
 import type { MessageChat } from '../../../moteur/salle';
 import type { ActionBJ } from '../../../moteur/blackjack/regles';
@@ -200,7 +201,7 @@ export class EcranBJ {
       ${hote ? `<button class="btn btn-or" data-lancer>Lancer la partie</button>
         <p class="doux petit" style="margin:10px 0 0">Tout le monde joue contre le croupier : pas besoin d'attendre d'être plusieurs.</p>`
         : `<p>En attente de l'hôte…</p>`}
-      <p style="margin:12px 0 0"><button class="lien" data-regles2>Jamais joué ? Les règles en 1 minute</button></p>`;
+      <p style="margin:12px 0 0"><button class="lien" data-regles2>Jamais joué ? Apprends en 2 minutes</button></p>`;
     const cp = $('[data-copier]', c); if (cp) cp.onclick = () => this.copierCode();
     const bl = $('[data-lancer]', c); if (bl) bl.onclick = () => { debloquerSon(); this.canal.envoyer({ c: 'lancer' }); };
     $('[data-regles2]', c).onclick = () => ouvrirReglesBJ();
@@ -554,25 +555,5 @@ export class EcranBJ {
   }
 }
 
-/** Les règles du Black Jack, expliquées simplement. */
-export function ouvrirReglesBJ() {
-  const p = panneau(`<h2>Le Black Jack en 1 minute</h2>
-    <div class="regles-bj">
-      <p><b>Le but :</b> battre le croupier en s'approchant le plus possible de <b>21</b>, sans le dépasser. Chacun joue contre le croupier, pas contre les autres joueurs.</p>
-      <p><b>Valeur des cartes :</b> 2 à 10 = leur valeur · Valet, Dame, Roi = 10 · As = 1 ou 11 (au mieux pour toi). Une main avec un As compté 11 est dite « souple » : on l'affiche « 7/17 ».</p>
-      <p><b>Déroulé :</b> tu mises, tu reçois 2 cartes visibles, le croupier en a une visible et une cachée. Puis tu choisis :</p>
-      <ul>
-        <li><b>Tirer</b> : une carte de plus. Au-delà de 21, tu as perdu.</li>
-        <li><b>Rester</b> : tu gardes ta main.</li>
-        <li><b>Doubler</b> : sur tes 2 premières cartes, tu doubles ta mise et reçois exactement une carte.</li>
-        <li><b>Séparer</b> : avec une paire, tu en fais deux mains (même mise sur chacune).</li>
-        <li><b>Abandon</b> : sur tes 2 premières cartes, tu renonces et récupères la moitié de ta mise.</li>
-      </ul>
-      <p><b>Le croupier</b> retourne sa carte et tire obligatoirement jusqu'à 16, puis s'arrête à 17 ou plus. S'il dépasse 21, tous les joueurs encore en jeu gagnent.</p>
-      <p><b>Paiements :</b> gagné = ta mise ×2 · <b>Black Jack</b> (As + figure ou 10 dès les 2 premières cartes) = payé 3 contre 2 · égalité = mise rendue.</p>
-      <p><b>Assurance :</b> quand le croupier montre un As, tu peux payer la moitié de ta mise pour te protéger d'un Black Jack. Elle paie 2 contre 1… mais sur le long terme, mieux vaut la refuser.</p>
-      <p>💡 Bloqué ? Le bouton <b>Conseil</b> te donne le meilleur coup selon la « stratégie de base », celle des pros.</p>
-    </div>
-    <button class="btn btn-or btn-plein" data-ok>C'est parti !</button>`);
-  $('[data-ok]', p.el).onclick = () => p.fermer();
-}
+/** Les règles, en petite leçon interactive. */
+export function ouvrirReglesBJ() { ouvrirApprendre('blackjack'); }

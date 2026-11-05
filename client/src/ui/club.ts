@@ -1,3 +1,4 @@
+import { ouvrirApprendre } from './apprendre';
 /**
  * Le Club : l'accueil une fois connecté.
  * Un plan cartoon (le Casino et le Kiosque côte à côte), le portefeuille en Clubs ♣, le bonus du jour
@@ -250,6 +251,7 @@ export class EcranHall {
     c.innerHTML = `<div class="salle-jeu">
       <div class="ligne" style="gap:10px;margin-bottom:12px"><button class="btn btn-rond btn-fantome" data-retour aria-label="Retour au Club">←</button><h1 style="font-size:24px">Le Casino</h1></div>
       <div class="segments">${(['poker', 'blackjack', 'roulette'] as JeuCasino[]).map((j) => `<button data-seg="${j}" class="${j === jeu ? 'on' : ''}">${NOMS[j]}</button>`).join('')}</div>
+      <button class="apprendre-salle" data-apprendre><span>🎓</span><span><b>Apprendre à jouer ${jeu === 'roulette' ? 'à la' : 'au'} ${NOMS[jeu]}</b><small>Une leçon de 2 minutes, avec des mises en situation</small></span><i>›</i></button>
       <h3 class="titre-rubrique" style="margin-top:4px">Le Casino · avec tes Clubs ♣</h3>
       <p class="doux petit" style="margin:0 0 10px">La cave est prélevée sur ton portefeuille. En te levant, tes jetons y retournent.</p>
       <div class="villes" data-villes></div>
@@ -267,6 +269,7 @@ export class EcranHall {
     $$('[data-seg]', c).forEach((b) => b.onclick = () => { memoire.jeu = b.dataset.seg as JeuCasino; this.afficher(); });
     $('[data-creer]', c).onclick = () => this.a.creer(jeu);
     $('[data-solo]', c).onclick = () => this.a.solo(jeu);
+    $('[data-apprendre]', c).onclick = () => ouvrirApprendre(jeu, (j) => this.a.solo(j));
     $('[data-code]', c).onclick = () => this.demanderCode();
     this.majVilles();
     this.majListe();
