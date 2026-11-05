@@ -21,7 +21,9 @@ import { EcranBJ, CanalBJ } from './ui/blackjack';
 import { SalleBJ, ReglagesBJ, MessageBJ } from '../../moteur/blackjack/salleBJ';
 import { EcranRoulette, CanalRoulette } from './ui/roulette';
 import { SalleRoulette, ReglagesRoulette, MessageRoulette } from '../../moteur/roulette/salleRoulette';
-import { ecranConnexion, ecranReinitialiser, EcranHall, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces } from './ui/ecrans';
+import { EcranHall } from './ui/club';
+import type { JeuCasino } from './ui/ecrans';
+import { ecranConnexion, ecranReinitialiser, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces } from './ui/ecrans';
 import { toast, html } from './ui/commun';
 import { debloquerSon, reglerSon } from './vue/son';
 import { volumeMusique } from './vue/musique';
@@ -129,20 +131,21 @@ function allerHall() {
   if (!utilisateur || !reseau) return allerConnexion();
   const r = reseau;
   hall = new EcranHall(app, utilisateur, {
-    creer: () => allerCreation(),
+    creer: (jeu) => allerCreation(jeu),
     rejoindreCode: (code) => r.envoyer({ type: 'rejoindre', code }),
     rejoindre: (id) => { debloquerSon(); r.envoyer({ type: 'rejoindre', id }); },
     regarder: (id) => r.envoyer({ type: 'regarder', id }),
-    solo: () => allerSolo(),
+    solo: (jeu) => allerSolo(jeu),
     profil: () => allerProfil(),
     joueurs: () => allerJoueurs(),
   });
   r.envoyer({ type: 'hall' });
 }
 
-function allerCreation() {
+function allerCreation(jeu?: JeuCasino) {
   hall = null;
   ecranCreation(app, {
+    jeu,
     solo: false,
     nomParDefaut: `Table de ${utilisateur?.pseudo ?? 'moi'}`,
     onRetour: () => allerHall(),
@@ -240,9 +243,10 @@ function avatarSolo(): AvatarId {
   return utilisateur?.avatar ?? 'renard';
 }
 
-function allerSolo() {
+function allerSolo(jeu?: JeuCasino) {
   hall = null;
   ecranCreation(app, {
+    jeu,
     solo: true,
     nomParDefaut: 'Partie solo',
     avatarSolo: avatarSolo(),

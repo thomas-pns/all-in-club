@@ -261,7 +261,7 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 3px; }
 .bouton-chat { position: relative; }
 .pastille-non-lus { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--corail); color: #fff; font-size: 12px; font-weight: 800; display: grid; place-items: center; padding: 0 5px; border: 2px solid var(--trait); }
 .panneau-chat {
-  position: absolute; right: 10px; top: 6px; bottom: 6px; width: min(340px, calc(100% - 20px)); z-index: 6;
+  position: absolute; right: 10px; top: calc(62px + var(--haut)); bottom: 10px; width: min(340px, calc(100% - 20px)); z-index: 6;
   background: rgba(35, 26, 59, .96); border: 3px solid var(--trait); border-radius: 20px; display: flex; flex-direction: column;
   box-shadow: 0 8px 0 rgba(0,0,0,.3); animation: monte .2s;
 }
@@ -282,8 +282,14 @@ button:focus-visible { outline: 3px solid var(--or); outline-offset: 3px; }
 .roue-emotes button:hover { background: rgba(255,255,255,.08); transform: scale(1.08); }
 .roue-emotes button:active { transform: scale(.94); }
 .roue-emotes svg { width: 56px; height: 56px; display: block; }
-.bulles-chat { position: absolute; left: 10px; top: 8px; z-index: 5; display: flex; flex-direction: column; gap: 6px; max-width: min(360px, 70%); pointer-events: none; }
-.bulle-chat { background: rgba(255, 244, 223, .95); color: var(--trait); border: 3px solid var(--trait); border-radius: 4px 16px 16px 16px; padding: 6px 12px; font-size: 14px; font-weight: 600; animation: monte .2s; transition: opacity .4s, transform .4s; }
+.bulles-chat { position: absolute; left: 10px; top: 8px; z-index: 5; display: flex; flex-direction: column; gap: 6px; max-width: min(320px, 66%); pointer-events: none; }
+/* Le fil : les derniers messages défilent en transparence, les plus anciens s'effacent */
+.bulle-chat { display: flex; gap: 6px; align-items: flex-start; animation: monte .2s; transition: opacity .4s, transform .4s; }
+.bulle-chat svg { width: 26px; height: 26px; flex: none; }
+.bulle-chat > span { background: rgba(35, 26, 59, .82); color: var(--creme); border-radius: 4px 14px 14px 14px; padding: 5px 10px; font-size: 13.5px; font-weight: 700; line-height: 1.3; word-break: break-word; }
+.bulle-chat b { color: var(--or); }
+.bulle-chat:nth-last-child(3) { opacity: .5; }
+.bulle-chat:nth-last-child(2) { opacity: .75; }
 .bulle-chat.part { opacity: 0; transform: translateY(-8px); }
 @media (max-width: 600px) {
   .panneau-chat { left: 6px; right: 6px; width: auto; top: auto; height: 62%; }
@@ -522,3 +528,145 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 
 /* Téléphone : le code de la table passe dans le menu (la barre du haut débordait) */
 @media (max-width: 600px) { .barre-haut .code { display: none; } }
+
+/* ======================= Le Club (accueil) ======================= */
+.club { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.club-entete { display: flex; align-items: center; gap: 10px; padding: calc(12px + var(--haut)) calc(14px + var(--droite)) 8px calc(14px + var(--gauche)); max-width: 820px; width: 100%; margin: 0 auto; }
+.club-moi { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; background: none; border: none; color: var(--creme); cursor: pointer; text-align: left; padding: 0; font: inherit; }
+.club-moi svg { width: 46px; height: 46px; flex: none; }
+.club-moi span { display: flex; flex-direction: column; min-width: 0; }
+.club-moi b { font-family: Fredoka; font-weight: 600; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.club-moi small { font-size: 12px; font-weight: 800; color: var(--doux); }
+.porte-monnaie { display: flex; align-items: center; gap: 7px; background: var(--nuit3); border: 3px solid var(--trait); border-radius: 999px; padding: 4px 14px 4px 4px; cursor: pointer; color: var(--or); font-family: Fredoka; font-weight: 700; font-size: 18px; flex: none; }
+.porte-monnaie.tinte { animation: tinte .5s cubic-bezier(.3,1.6,.5,1); }
+@keyframes tinte { 40% { transform: scale(1.15); } }
+.piece { width: 28px; height: 28px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #FFE08A, var(--or) 60%, #E59A12); border: 2.5px solid var(--trait); display: inline-grid; place-items: center; color: var(--trait); font-size: 16px; font-weight: 800; box-shadow: inset 0 0 0 2.5px rgba(255,255,255,.35); flex: none; }
+.piece-vol { position: fixed; z-index: 80; pointer-events: none; width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #FFE08A, #FFC23D 60%, #E59A12); border: 2.5px solid #2A1E3F; display: grid; place-items: center; color: #2A1E3F; font-weight: 800; font-size: 14px; }
+.club-contenu { flex: 1; overflow-y: auto; padding: 4px calc(12px + var(--droite)) 16px calc(12px + var(--gauche)); width: 100%; max-width: 820px; margin: 0 auto; }
+.club-onglets { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 6px calc(8px + var(--droite)) calc(8px + var(--bas)) calc(8px + var(--gauche)); background: var(--nuit2); border-top: 3px solid var(--trait); }
+.club-onglets button { background: none; border: none; color: var(--doux); font-family: Fredoka; font-weight: 600; font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 52px; justify-content: center; cursor: pointer; border-radius: 14px; }
+.club-onglets button.on { color: var(--or); }
+.club-onglets button:active { background: rgba(255,255,255,.05); }
+@media (min-width: 900px) { .club-onglets { max-width: 820px; width: 100%; margin: 0 auto 12px; border: 3px solid var(--trait); border-radius: 22px; } }
+
+/* Annonces (bonus du jour, coup de pouce) */
+.annonces { display: flex; flex-direction: column; gap: 8px; }
+.annonces:not(:empty) { margin-bottom: 10px; }
+.annonce { display: flex; align-items: center; gap: 12px; border: 3px solid var(--trait); border-radius: 18px; padding: 10px 12px; box-shadow: 0 5px 0 var(--trait); text-align: left; cursor: pointer; font: inherit; min-height: 66px; transition: opacity .4s, transform .4s; }
+.annonce b { font-family: Fredoka; font-weight: 600; font-size: 17px; display: block; }
+.annonce small { font-size: 12.5px; font-weight: 800; }
+.annonce.bonus { background: var(--or); color: var(--trait); animation: appel 2.4s ease-in-out infinite; }
+.annonce.pouce { background: var(--ciel); color: var(--trait); }
+.annonce.ouvert { animation: none; justify-content: center; }
+.annonce.part { opacity: 0; transform: translateY(-10px) scale(.96); }
+.annonce .gain { font-family: Fredoka; font-weight: 700; font-size: 26px; animation: monte .35s cubic-bezier(.3,1.5,.5,1); }
+.annonce .gain small { font-size: 15px; }
+@keyframes appel { 0%, 100% { transform: none; } 50% { transform: translateY(-2px); } }
+.coffre { width: 46px; height: 38px; flex: none; border-radius: 8px; background: var(--corail); border: 3px solid var(--trait); position: relative; display: block; }
+.coffre::before { content: ''; position: absolute; left: -3px; right: -3px; top: 9px; height: 6px; background: var(--trait); }
+.coffre i { position: absolute; left: 50%; top: 13px; width: 12px; height: 12px; margin-left: -6px; border-radius: 3px; background: var(--or); border: 2px solid var(--trait); }
+.coffre.gros { background: var(--prune); }
+.annonce.ouvert .coffre { display: none; }
+
+/* Le plan */
+.plan { position: relative; height: clamp(440px, 64vh, 560px); border-radius: 26px; background: var(--nuit2); border: 3px solid var(--trait); overflow: hidden; }
+.plan .etoile { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--creme); opacity: .55; }
+.plan .lune { position: absolute; right: 22px; top: 18px; width: 36px; height: 36px; border-radius: 50%; background: var(--creme); box-shadow: inset -10px 3px 0 0 var(--nuit2); }
+.plan .trottoir { position: absolute; left: 0; right: 0; bottom: 0; height: 92px; background: var(--nuit3); }
+.plan .trottoir::after { content: ''; position: absolute; left: 0; right: 0; top: 46px; height: 10px; background: repeating-linear-gradient(90deg, rgba(255,244,223,.16) 0 24px, transparent 24px 48px); }
+.batiment { position: absolute; bottom: 70px; }
+.casino { left: 3%; width: 58%; height: calc(100% - 130px); max-width: 360px; }
+.casino .enseigne { position: absolute; left: 9%; right: 9%; top: 0; height: 56px; background: var(--or); border: 4px solid var(--trait); border-radius: 16px; display: grid; place-items: center; font-family: Fredoka; font-weight: 700; font-size: clamp(22px, 6vw, 30px); letter-spacing: 3px; color: var(--trait); z-index: 2; box-shadow: 0 0 24px rgba(255,194,61,.35); }
+.casino .ampoules { position: absolute; left: 14%; right: 14%; top: 62px; height: 10px; z-index: 2; background: radial-gradient(circle, var(--creme) 3px, transparent 4px) 0 0 / 16px 10px; animation: clignote 1.2s steps(2) infinite; }
+@keyframes clignote { 50% { opacity: .45; } }
+.casino .facade { position: absolute; left: 0; right: 0; top: 44px; bottom: 0; background: var(--prune); border: 4px solid var(--trait); border-radius: 22px 22px 6px 6px; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 38px 10px 12px; }
+.porte { display: flex; align-items: center; gap: 10px; background: var(--vert); border: 3px solid var(--trait); border-radius: 30px 12px 12px 30px; padding: 6px 10px 6px 6px; color: var(--creme); cursor: pointer; font: inherit; text-align: left; box-shadow: 0 4px 0 var(--trait); transition: transform .08s, box-shadow .08s, filter .15s; min-height: 54px; }
+.porte:hover { filter: brightness(1.08); }
+.porte:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--trait); }
+.porte .hublot { width: 40px; height: 40px; border-radius: 50%; background: var(--trait); display: grid; place-items: center; flex: none; }
+.porte .sym { font-size: 22px; color: var(--creme); }
+.porte .sym.or { font-family: Fredoka; font-weight: 700; font-size: 17px; color: var(--or); }
+.porte b { font-family: Fredoka; font-weight: 600; font-size: 17px; flex: 1; }
+.porte small { font-size: 11px; font-weight: 800; background: rgba(42,30,63,.45); border-radius: 999px; padding: 1px 7px; }
+.porte small:empty { display: none; }
+.kiosque { right: 3%; width: 33%; max-width: 200px; height: 58%; background: none; border: none; padding: 0; cursor: pointer; color: var(--trait); font: inherit; }
+.kiosque .auvent { position: absolute; left: 0; right: 0; top: 0; height: 46px; border: 4px solid var(--trait); border-radius: 16px 16px 8px 8px; background: repeating-linear-gradient(90deg, var(--corail) 0 16px, var(--creme) 16px 32px); z-index: 1; }
+.kiosque .vitrine { position: absolute; left: 7%; right: 7%; top: 42px; bottom: 0; background: var(--ciel); border: 4px solid var(--trait); border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; text-align: center; }
+.kiosque .vitrine b { font-family: Fredoka; font-weight: 700; font-size: 19px; }
+.kiosque .vitrine small { font-size: 11.5px; font-weight: 800; line-height: 1.25; }
+.mini-ticket { width: 70px; height: 46px; border-radius: 6px; background: var(--creme); border: 3px solid var(--trait); display: grid; grid-template-columns: repeat(3, 1fr); padding: 4px; gap: 2px; }
+.mini-ticket i { background: var(--corail); border-radius: 2px; }
+.mini-ticket i.g { background: #C9C3D6; }
+.bientot { background: var(--or); border: 2.5px solid var(--trait); border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 800; }
+.salon-prive { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); white-space: nowrap; background: var(--trait); color: var(--creme); border: 2.5px solid rgba(255,244,223,.25); border-radius: 999px; padding: 9px 16px; font-weight: 800; font-size: 13.5px; cursor: pointer; font-family: Nunito; }
+.plan-legende { text-align: center; margin: 10px 0 0; }
+
+/* Salle d'un jeu */
+.segments { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--nuit2); border: 3px solid var(--trait); border-radius: 16px; padding: 4px; gap: 4px; margin-bottom: 12px; }
+.segments button { border: none; border-radius: 12px; background: none; color: var(--doux); font-family: Fredoka; font-weight: 600; font-size: 15px; min-height: 42px; cursor: pointer; }
+.segments button.on { background: var(--or); color: var(--trait); }
+.bandeau-ville { background: var(--creme); color: var(--trait); border: 3px solid var(--trait); border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+.bandeau-ville b { font-family: Fredoka; font-weight: 600; font-size: 16px; }
+.bandeau-ville span { font-size: 13px; font-weight: 700; line-height: 1.35; }
+.actions-salle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.actions-salle .btn { white-space: normal; font-size: 16px; padding: 12px 8px 13px; }
+@media (max-width: 600px) { .actions-salle { grid-template-columns: 1fr 1fr; } .actions-salle .btn-or { grid-column: 1 / -1; } }
+
+/* Portefeuille */
+.solde-grand { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.solde-grand .piece { width: 46px; height: 46px; font-size: 24px; }
+.solde-grand b { font-family: Fredoka; font-size: 40px; color: var(--or); }
+.solde-grand small { font-weight: 800; color: var(--doux); }
+.calendrier { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.calendrier .jour { position: relative; border-radius: 14px; background: var(--nuit3); border: 3px solid var(--trait); padding: 8px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-height: 96px; justify-content: center; }
+.calendrier .jour.large { grid-column: 1 / -1; min-height: 76px; }
+.calendrier .jour small { font-size: 11.5px; font-weight: 800; color: var(--doux); }
+.calendrier .jour b { font-family: Fredoka; font-weight: 600; font-size: 13.5px; line-height: 1.15; }
+.calendrier .jour.fait { opacity: .55; }
+.calendrier .jour.fait::after { content: '✓'; position: absolute; top: 5px; right: 6px; width: 20px; height: 20px; border-radius: 50%; background: var(--vert); border: 2px solid var(--trait); font-size: 12px; font-weight: 800; display: grid; place-items: center; }
+.calendrier .jour.auj { background: var(--or); color: var(--trait); }
+.calendrier .jour.auj small { color: var(--trait); }
+.calendrier .coffre { width: 38px; height: 30px; }
+.calendrier .coffre::before { top: 6px; height: 5px; }
+.calendrier .coffre i { top: 9px; width: 10px; height: 10px; margin-left: -5px; }
+.mouvements { display: flex; flex-direction: column; gap: 6px; }
+.mouvements > div { display: flex; justify-content: space-between; align-items: center; background: var(--nuit3); border-radius: 12px; padding: 7px 10px; font-weight: 800; font-size: 14px; }
+.mouvements small { display: block; font-size: 11.5px; color: var(--doux); }
+.mouvements .plus { color: #7EE2A4; } .mouvements .moins { color: #FFB1A8; }
+
+/* Classement */
+.liste-riches { display: flex; flex-direction: column; gap: 8px; }
+.riche { display: flex; align-items: center; gap: 10px; background: var(--nuit2); border: 3px solid var(--trait); border-radius: 16px; padding: 6px 12px 6px 8px; }
+.riche.moi { border-color: var(--or); }
+.riche .rang { width: 28px; text-align: center; font-family: Fredoka; font-weight: 700; font-size: 18px; color: var(--doux); }
+.riche:nth-child(1) .rang { color: var(--or); }
+.riche svg { width: 44px; height: 44px; flex: none; }
+.riche b { flex: 1; font-family: Fredoka; font-weight: 600; font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.riche .montant { font-family: Fredoka; font-weight: 700; color: var(--or); }
+
+/* Kiosque (avant-goût) */
+.auvent-large { height: 30px; border: 3px solid var(--trait); border-radius: 12px 12px 4px 4px; background: repeating-linear-gradient(90deg, var(--corail) 0 22px, var(--creme) 22px 44px); margin-bottom: 12px; }
+.titre-rubrique { font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--doux); margin: 14px 0 8px; }
+.rangee-tickets { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.ticket { flex: none; width: 150px; height: 190px; border-radius: 14px; border: 3px solid var(--trait); box-shadow: 0 5px 0 var(--trait); padding: 10px; display: flex; flex-direction: column; gap: 6px; opacity: .85; }
+.ticket b { font-family: Fredoka; font-weight: 700; font-size: 18px; line-height: 1.05; }
+.ticket small { font-family: Fredoka; font-weight: 700; font-size: 15px; }
+.zone-grattage { flex: 1; border-radius: 10px; border: 2.5px solid var(--trait); background: repeating-linear-gradient(135deg, #C9C3D6 0 6px, #B5AEC6 6px 12px); display: grid; place-items: center; text-align: center; padding: 4px; color: var(--trait); font-family: Fredoka; font-weight: 600; font-size: 13px; }
+.t-morpion { background: var(--vert); color: var(--creme); }
+.t-numeros { background: var(--trait); color: var(--or); }
+.t-mots { background: var(--corail); color: var(--trait); }
+.tirage-carte { border-radius: 18px; border: 3px solid var(--trait); box-shadow: 0 5px 0 var(--trait); padding: 12px 14px; display: flex; flex-direction: column; margin-bottom: 10px; color: var(--trait); }
+.tirage-carte b { font-family: Fredoka; font-weight: 700; font-size: 20px; }
+.tirage-carte span { font-size: 13px; font-weight: 800; }
+.tirage-carte.keno { background: var(--ciel); }
+.tirage-carte.loto { background: var(--or); }
+@media (min-width: 700px) { .casino { left: 9%; } .kiosque { right: 9%; height: 64%; } }
+
+/* Chat sur le côté */
+.languette-chat { position: absolute; right: 0; top: 50%; transform: translateY(-50%); z-index: 4; writing-mode: vertical-rl; min-height: 92px; width: 34px; padding: 10px 0; border-radius: 14px 0 0 14px; border: 3px solid var(--trait); border-right: none; background: var(--prune); color: var(--creme); font-family: Fredoka; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: -3px 4px 0 rgba(0,0,0,.25); }
+.languette-chat b { writing-mode: horizontal-tb; min-width: 20px; height: 20px; border-radius: 10px; background: var(--corail); color: #fff; font-size: 12px; display: grid; place-items: center; border: 2px solid var(--trait); }
+.ecran-table.chat-ancre { padding-right: 330px; }
+.ecran-table.chat-ancre > .panneau-chat { right: 0; top: 0; bottom: 0; width: 330px; border-radius: 0; border-width: 0 0 0 3px; box-shadow: none; animation: none; background: var(--nuit2); padding-top: var(--haut); }
+.ecran-table.chat-ancre .bouton-chat { display: none; }
+@media (max-width: 600px) { .barre-haut .bouton-chat { display: none; } .panneau-chat { top: auto; bottom: 6px; } }
+.ligne-conseil .ligne { flex-wrap: nowrap; gap: 8px; }

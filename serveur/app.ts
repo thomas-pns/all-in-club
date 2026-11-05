@@ -14,6 +14,7 @@ import { AVATARS } from '../moteur/avatars.js';
 import { listeSucces, CADRES, DOS } from '../moteur/succes.js';
 import { Donnees } from './donnees.js';
 import { Notifications } from './notifications.js';
+import { Portefeuilles, ErreurPortefeuille } from './portefeuille.js';
 
 export const VERSION = '0.2.0';
 
@@ -44,6 +45,7 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   const app = Fastify({ logger: o.journal ? { level: 'info', redact: ['req.headers.authorization'] } : false, trustProxy: true, bodyLimit: 32 * 1024 });
   const comptes = new Comptes(o.db);
   const donnees = new Donnees(o.db);
+  const portefeuilles = new Portefeuilles(o.db);
   const notifications = new Notifications(o.db, o.urlPublique ?? 'mailto:admin@all-in-club.invalid');
   const hall = new Hall(donnees, notifications);
   hall.restaurer();
@@ -54,6 +56,7 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
 
   app.setErrorHandler((e, _req, rep) => {
     if (e instanceof ErreurCompte) return rep.code(e.code).send({ erreur: e.message });
+    if (e instanceof ErreurPortefeuille) return rep.code(400).send({ erreur: e.message });
     if ((e as any).validation || (e as any).statusCode === 400) return rep.code(400).send({ erreur: 'Requête invalide' });
     app.log.error(e);
     return rep.code(500).send({ erreur: 'Erreur interne' });
@@ -81,6 +84,13 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   app.get('/api/succes', async () => ({ succes: listeSucces(), cadres: CADRES, dos: DOS }));
 
   app.get('/api/joueurs', async (req) => { exigerUtilisateur(req); return { joueurs: donnees.joueurs() }; });
+
+  /* Portefeuille en Clubs ♣ (argent fictif) */
+  app.get('/api/portefeuille', async (req) => portefeuilles.etat(exigerUtilisateur(req).id));
+  app.get('/api/portefeuille/mouvements', async (req) => ({ mouvements: portefeuilles.mouvements(exigerUtilisateur(req).id) }));
+  app.post('/api/portefeuille/bonus', async (req) => portefeuilles.encaisserBonus(exigerUtilisateur(req).id));
+  app.post('/api/portefeuille/coup-de-pouce', async (req) => portefeuilles.coupDePouce(exigerUtilisateur(req).id));
+  app.get('/api/classement', async (req) => { exigerUtilisateur(req); return { joueurs: portefeuilles.classement() }; });
 
   app.get('/api/joueurs/:pseudo', async (req) => {
     exigerUtilisateur(req);

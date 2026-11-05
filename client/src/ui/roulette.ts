@@ -11,6 +11,7 @@ import { SceneRoulette, COULEURS_SIEGES } from '../vue/sceneRoulette';
 import { jouerSon, reglerSon, debloquerSon } from '../vue/son';
 import { fmt } from '../art/rendu';
 import { $, $$, esc, html, toast, panneau, confirmer, avatar, lirePrefs, suivrePrefs, ouvrirReglagesPerso } from './commun';
+import { ChatLateral } from './chatLateral';
 
 export interface CanalRoulette {
   envoyer(cmd: CommandeRoulette): void;
@@ -35,6 +36,7 @@ export class EcranRoulette {
   private panneauFin: { fermer: () => void } | null = null;
   private resultatsVus = '';
   private nonLus = 0;
+  private lateral!: ChatLateral;
   private jeton = 0;
   /** Mes derniers jetons posés, pour « Annuler ». */
   private pile: { mise: string; montant: number }[] = [];
@@ -69,6 +71,8 @@ export class EcranRoulette {
       <div class="barre-actions barre-roulette" data-barre></div>
     </div>`);
     racine.replaceChildren(this.el);
+    this.lateral = new ChatLateral(this.el, () => { this.nonLus = 0; this.majNonLus(); });
+    this.nettoyages.push(() => this.lateral.detruire());
     $('[data-quitter]', this.el).onclick = () => this.quitter();
     $('[data-menu]', this.el).onclick = () => this.menu();
     $('[data-regles]', this.el).onclick = () => ouvrirReglesRoulette();
@@ -349,22 +353,14 @@ export class EcranRoulette {
 
   /* ------------------------------ Chat ------------------------------ */
 
-  private basculerChat(ouvrir?: boolean) {
-    const p = $('[data-panneau-chat]', this.el);
-    const o = ouvrir ?? p.classList.contains('cache');
-    p.classList.toggle('cache', !o);
-    if (o) {
-      this.nonLus = 0;
-      this.majNonLus();
-      const m = $('[data-messages]', this.el); m.scrollTop = m.scrollHeight;
-      if (window.matchMedia('(pointer: fine)').matches) ($('input', p) as HTMLInputElement).focus();
-    }
-  }
+  private basculerChat(ouvrir?: boolean) { this.lateral.basculer(ouvrir); }
+
 
   private majNonLus() {
     const b = $('[data-nonlus]', this.el);
     b.textContent = this.nonLus > 9 ? '9+' : String(this.nonLus);
     b.classList.toggle('cache', this.nonLus === 0);
+    this.lateral?.nonLus(this.nonLus);
   }
 
   private ajouterChat(m: MessageChat, nouveau: boolean) {
@@ -374,13 +370,13 @@ export class EcranRoulette {
     while (zone.children.length > 100) zone.firstElementChild!.remove();
     zone.scrollTop = zone.scrollHeight;
     if (!nouveau) return;
-    if ($('[data-panneau-chat]', this.el).classList.contains('cache')) {
+    if (!this.lateral.ouvert) {
       if (!moi) { this.nonLus++; this.majNonLus(); jouerSon('clic'); }
       const bulles = $('[data-bulles]', this.el);
-      const bl = html(`<div class="bulle-chat"><b>${esc(m.nom)}</b> ${esc(m.texte)}</div>`);
+      const bl = html(`<div class="bulle-chat">${avatar(m.avatar, 'neutre', 26)}<span><b>${esc(m.nom)}</b> ${esc(m.texte)}</span></div>`);
       bulles.appendChild(bl);
       while (bulles.children.length > 3) bulles.firstElementChild!.remove();
-      setTimeout(() => { bl.classList.add('part'); setTimeout(() => bl.remove(), 400); }, 4000);
+      setTimeout(() => { bl.classList.add('part'); setTimeout(() => bl.remove(), 400); }, 10000);
     }
   }
 
