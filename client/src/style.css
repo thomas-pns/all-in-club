@@ -499,3 +499,20 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 }
 @media (max-width: 600px) { .facultatif-tel { display: none; } }
 .ecran-bj .barre-haut .infos { overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Roulette ---------- */
+.etiq-jeu.ro { background: linear-gradient(#FF7E6E, #E5484D); color: #fff; }
+.jeux { grid-template-columns: repeat(3, 1fr); }
+.actions-roulette { --n: 4; }
+.jeton-bj.choisi { transform: translateY(-6px); box-shadow: 0 0 0 3px var(--or), 0 7px 0 var(--trait); }
+.jeton-bj.choisi:active:not(:disabled) { transform: translateY(-3px); }
+.compte.urgent { color: #FF8A7E; animation: pulse-conseil .6s ease-in-out infinite; }
+.aide-mise { text-transform: none; letter-spacing: .2px; font-size: 14px; color: var(--creme); opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rien-ne-va-plus { font-family: Fredoka; font-size: 20px; color: var(--or); }
+.ecran-roulette .barre-haut .infos { overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 900px) { .barre-roulette { height: calc(178px + var(--bas)); } }
+@media (max-width: 600px) {
+  .jeux { grid-template-columns: 1fr 1fr 1fr; }
+  .tuile-jeu { flex-direction: column; align-items: flex-start; }
+  .tuile-jeu small { display: none; }
+}

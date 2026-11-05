@@ -5,6 +5,8 @@ import type { ReglagesSalle } from '../../../moteur/salle';
 import { REGLAGES_DEFAUT } from '../../../moteur/salle';
 import type { ReglagesBJ } from '../../../moteur/blackjack/salleBJ';
 import { REGLAGES_BJ_DEFAUT } from '../../../moteur/blackjack/salleBJ';
+import type { ReglagesRoulette } from '../../../moteur/roulette/salleRoulette';
+import { REGLAGES_ROULETTE_DEFAUT } from '../../../moteur/roulette/salleRoulette';
 import type { AvatarId } from '../../../moteur/avatars';
 import type { Utilisateur } from '../../../serveur/comptes';
 import type { ResumeTable } from '../../../serveur/hall';
@@ -196,10 +198,10 @@ export class EcranHall {
     zone.innerHTML = `<div class="tables">${tables.map((t) => {
       const pleine = t.joueurs >= t.places;
       const statut = t.statut === 'attente' ? 'En attente' : t.statut === 'en_jeu' ? 'En jeu' : t.statut === 'pause' ? 'En pause' : 'Terminée';
-      const bj = t.jeu === 'blackjack';
-      return `<div class="carte-table ${bj ? 'bj' : ''}">
-        <div class="ligne" style="justify-content:space-between"><h3><span class="etiq-jeu ${bj ? 'bj' : ''}">${bj ? '21' : '♠'}</span>${esc(t.nom)}</h3><span class="etiq ${t.statut}">${statut}</span></div>
-        <div class="doux petit">${bj ? 'Black Jack' : 'Poker'} · Hôte : ${esc(t.hote)} · ${bj ? `Mise ${fmt(t.pb)} à ${fmt(t.gb)}` : `Blindes ${fmt(t.pb)}/${fmt(t.gb)}`} ${t.visibilite === 'privee' ? '<span class="etiq prive">Privée</span>' : ''}</div>
+      const bj = t.jeu === 'blackjack', ro = t.jeu === 'roulette';
+      return `<div class="carte-table">
+        <div class="ligne" style="justify-content:space-between"><h3><span class="etiq-jeu ${bj ? 'bj' : ro ? 'ro' : ''}">${bj ? '21' : ro ? '◎' : '♠'}</span>${esc(t.nom)}</h3><span class="etiq ${t.statut}">${statut}</span></div>
+        <div class="doux petit">${bj ? 'Black Jack' : ro ? 'Roulette' : 'Poker'} · Hôte : ${esc(t.hote)} · ${bj ? `Mise ${fmt(t.pb)} à ${fmt(t.gb)}` : ro ? `Jeton min. ${fmt(t.pb)}` : `Blindes ${fmt(t.pb)}/${fmt(t.gb)}`} ${t.visibilite === 'privee' ? '<span class="etiq prive">Privée</span>' : ''}</div>
         <div class="ligne" style="justify-content:space-between">
           <div class="avs">${t.avatars.map((a) => avatar(a, 'neutre', 38)).join('')}</div>
           <b>${t.joueurs}/${t.places}</b></div>
@@ -214,17 +216,18 @@ export class EcranHall {
 
 /* ------------------------------ Création de table ------------------------------ */
 
-export type JeuCasino = 'poker' | 'blackjack';
-export interface OptsCreation { solo: boolean; nomParDefaut: string; onValider: (r: ReglagesSalle) => void; onValiderBJ: (r: ReglagesBJ) => void; onRetour: () => void; avatarSolo?: AvatarId; onAvatarSolo?: (a: AvatarId) => void; jeu?: JeuCasino }
+export type JeuCasino = 'poker' | 'blackjack' | 'roulette';
+export interface OptsCreation { solo: boolean; nomParDefaut: string; onValider: (r: ReglagesSalle) => void; onValiderBJ: (r: ReglagesBJ) => void; onValiderRoulette: (r: ReglagesRoulette) => void; onRetour: () => void; avatarSolo?: AvatarId; onAvatarSolo?: (a: AvatarId) => void; jeu?: JeuCasino }
 
 const CLE_JEU = 'aic-jeu';
-function jeuMemorise(): JeuCasino { try { return localStorage.getItem(CLE_JEU) === 'blackjack' ? 'blackjack' : 'poker'; } catch { return 'poker'; } }
+function jeuMemorise(): JeuCasino { try { const j = localStorage.getItem(CLE_JEU); return j === 'blackjack' || j === 'roulette' ? j : 'poker'; } catch { return 'poker'; } }
 
 /** Le sélecteur de jeu en haut de l'écran de création. */
 function selecteurJeu(el: HTMLElement, racine: HTMLElement, opts: OptsCreation, jeu: JeuCasino) {
   const zone = $('[data-jeux]', el);
   zone.innerHTML = `<button type="button" class="tuile-jeu ${jeu === 'poker' ? 'on' : ''}" data-jeu="poker"><span class="icone-jeu">♠</span><span><b>Poker</b><small>Texas Hold'em entre potes</small></span></button>
-    <button type="button" class="tuile-jeu ${jeu === 'blackjack' ? 'on' : ''}" data-jeu="blackjack"><span class="icone-jeu">21</span><span><b>Black Jack</b><small>Tous contre le croupier</small></span></button>`;
+    <button type="button" class="tuile-jeu ${jeu === 'blackjack' ? 'on' : ''}" data-jeu="blackjack"><span class="icone-jeu">21</span><span><b>Black Jack</b><small>Tous contre le croupier</small></span></button>
+    <button type="button" class="tuile-jeu ${jeu === 'roulette' ? 'on' : ''}" data-jeu="roulette"><span class="icone-jeu">◎</span><span><b>Roulette</b><small>Faites vos jeux !</small></span></button>`;
   $$('[data-jeu]', zone).forEach((b) => b.onclick = () => {
     const j = b.dataset.jeu as JeuCasino;
     if (j === jeu) return;
@@ -286,9 +289,62 @@ function ecranCreationBJ(racine: HTMLElement, opts: OptsCreation) {
   };
 }
 
+function ecranCreationRoulette(racine: HTMLElement, opts: OptsCreation) {
+  const r: ReglagesRoulette = { ...REGLAGES_ROULETTE_DEFAUT, nom: opts.nomParDefaut.replace(/^Table de/, 'Roulette de'), ...(opts.solo ? { tempsMises: 0, visibilite: 'privee' as const, places: 1 } : {}) };
+  const choix = (cle: string, valeurs: [string | number, string][], courant: string | number) =>
+    `<div class="choix" data-choix="${cle}">${valeurs.map(([v, l]) => `<button type="button" data-v="${v}" class="${String(v) === String(courant) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const el = html(`<div class="ecran ecran-creation"><div class="etroit" style="max-width:980px">
+    <div class="ligne" style="margin-bottom:12px"><button class="btn btn-rond btn-fantome" data-retour>←</button><h1 style="font-size:26px">${opts.solo ? 'Partie solo' : 'Nouvelle table'}</h1></div>
+    <div class="jeux" data-jeux></div>
+    <form class="boite creation" data-form><div class="colonne">
+      ${opts.solo ? '<label class="champ" style="margin-bottom:6px"><span>Ton personnage</span></label><div data-avatars style="margin-bottom:16px"></div>' : `
+      <label class="champ"><span>Nom de la table</span><input type="text" name="nom" maxlength="30" value="${esc(r.nom)}"></label>
+      <label class="champ"><span>Visibilité</span>${choix('visibilite', [['publique', 'Publique (dans la liste)'], ['privee', 'Privée (avec un code)']], r.visibilite)}</label>`}
+      <div class="grille2">
+        <label class="champ"><span>Jetons de départ</span><select name="tapisDepart">${[500, 1000, 2000, 5000].map((v) => `<option value="${v}" ${v === r.tapisDepart ? 'selected' : ''}>${fmt(v)}</option>`).join('')}</select></label>
+        <label class="champ"><span>Jeton minimum</span><select name="miseMin">${[1, 5, 10, 25].map((v) => `<option value="${v}" ${v === r.miseMin ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        ${opts.solo ? '' : `<label class="champ"><span>Places</span><select name="places">${[1, 2, 3, 4, 5, 6].map((n) => `<option ${n === r.places ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`}
+        <label class="champ"><span>Recaves</span><select name="recaves">${['interdites', 1, 2, 3, 5, 'illimitees'].map((v) => `<option value="${v}" ${String(v) === String(r.recaves) ? 'selected' : ''}>${v === 'interdites' ? 'Interdites' : v === 'illimitees' ? 'Illimitées' : `${v} par joueur`}</option>`).join('')}</select></label>
+      </div></div><div class="colonne">
+      <label class="champ"><span>Durée de la partie</span>${choix('tours', [[10, '10 tours'], [20, '20'], [30, '30'], [50, '50'], [0, 'Illimitée']], r.tours)}</label>
+      <label class="champ"><span>Temps pour miser</span>${choix('tempsMises', [[15, '15 s'], [20, '20 s'], [30, '30 s'], [45, '45 s'], [0, 'Illimité']], r.tempsMises)}</label>
+      <label class="champ"><span>La partage (½ rendu sur le zéro)</span>${choix('partage', [['1', 'Oui'], ['0', 'Non']], r.partage ? '1' : '0')}</label>
+      <p class="doux petit" style="margin:2px 0 0">Roulette européenne à un zéro · le tour part dès que tout le monde est prêt.</p>
+      </div>
+      <button class="btn btn-or btn-plein valider" style="font-size:20px">${opts.solo ? 'Jouer !' : 'Créer la table'}</button>
+    </form></div></div>`);
+  racine.replaceChildren(el);
+  selecteurJeu(el, racine, opts, 'roulette');
+  if (opts.solo) $('[data-avatars]', el).appendChild(choixAvatars(opts.avatarSolo ?? 'renard', (a) => opts.onAvatarSolo?.(a)));
+  const valeurs: Record<string, string> = { visibilite: r.visibilite, tours: String(r.tours), tempsMises: String(r.tempsMises), partage: r.partage ? '1' : '0' };
+  $$('[data-choix]', el).forEach((g) => g.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button[data-v]') as HTMLElement | null;
+    if (!b) return;
+    $$('button', g).forEach((x) => x.classList.toggle('on', x === b));
+    valeurs[g.dataset.choix!] = b.dataset.v!;
+  }));
+  $('[data-retour]', el).onclick = () => opts.onRetour();
+  const f = $('[data-form]', el) as HTMLFormElement;
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(f)) as Record<string, string>;
+    const rc = d.recaves;
+    opts.onValiderRoulette({
+      nom: opts.solo ? 'Roulette solo' : (d.nom || r.nom),
+      visibilite: valeurs.visibilite as ReglagesRoulette['visibilite'],
+      tapisDepart: Number(d.tapisDepart), miseMin: Number(d.miseMin),
+      places: opts.solo ? 1 : Number(d.places),
+      recaves: rc === 'interdites' || rc === 'illimitees' ? rc : Number(rc),
+      tours: Number(valeurs.tours), tempsMises: Number(valeurs.tempsMises),
+      filtreInsultes: true, partage: valeurs.partage === '1',
+    });
+  };
+}
+
 export function ecranCreation(racine: HTMLElement, opts: OptsCreation) {
   const jeu = opts.jeu ?? jeuMemorise();
   if (jeu === 'blackjack') return ecranCreationBJ(racine, { ...opts, jeu });
+  if (jeu === 'roulette') return ecranCreationRoulette(racine, { ...opts, jeu });
   const r: ReglagesSalle = {
     ...REGLAGES_DEFAUT, nom: opts.nomParDefaut,
     ...(opts.solo ? { bots: 3, tempsReflexion: 0, visibilite: 'privee', recaves: 2 } : {}),

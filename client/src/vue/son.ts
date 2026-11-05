@@ -48,7 +48,7 @@ function ton(c: AudioContext, t: number, freq: number, duree: number, pic: numbe
   o.start(t); o.stop(t + duree + 0.05);
 }
 
-export type NomSon = 'carte' | 'retourne' | 'jeton' | 'jetons' | 'parole' | 'coucher' | 'tapis' | 'gagne' | 'grosGain' | 'tic' | 'tour' | 'clic';
+export type NomSon = 'carte' | 'retourne' | 'jeton' | 'jetons' | 'parole' | 'coucher' | 'tapis' | 'gagne' | 'grosGain' | 'tic' | 'tour' | 'clic' | 'bille';
 
 export function jouerSon(nom: NomSon) {
   if (!actif || !ctx || ctx.state !== 'running') return;
@@ -78,5 +78,13 @@ export function jouerSon(nom: NomSon) {
     case 'tic': ton(c, t, 1800, 0.03, 0.2, 'square'); break;
     case 'tour': ton(c, t, 880, 0.12, 0.2, 'sine'); ton(c, t + 0.1, 1320, 0.16, 0.18, 'sine'); break;
     case 'clic': ton(c, t, 1200, 0.03, 0.12, 'triangle'); break;
+    case 'bille': {
+      // La bille roule dans le cylindre puis rebondit dans les cases
+      const f = souffle(c, t, 5.2, 900, 3, 0.14, 'bandpass');
+      f.frequency.setValueAtTime(1400, t); f.frequency.exponentialRampToValueAtTime(380, t + 5.1);
+      let d = 4.6;
+      for (let i = 0; i < 9; i++) { ton(c, t + d, 2200 + Math.random() * 900, 0.04, 0.16 - i * 0.012, 'triangle'); d += 0.09 + i * 0.045; }
+      break;
+    }
   }
 }

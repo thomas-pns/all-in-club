@@ -19,6 +19,8 @@ import { Reseau, api, ErreurApi, jetonEnregistre, enregistrerJeton } from './res
 import { EcranTable, Canal } from './ui/table';
 import { EcranBJ, CanalBJ } from './ui/blackjack';
 import { SalleBJ, ReglagesBJ, MessageBJ } from '../../moteur/blackjack/salleBJ';
+import { EcranRoulette, CanalRoulette } from './ui/roulette';
+import { SalleRoulette, ReglagesRoulette, MessageRoulette } from '../../moteur/roulette/salleRoulette';
 import { ecranConnexion, ecranReinitialiser, EcranHall, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces } from './ui/ecrans';
 import { toast, html } from './ui/commun';
 import { debloquerSon, reglerSon } from './vue/son';
@@ -28,7 +30,7 @@ import { lirePrefs, suivrePrefs, definirNotifications, ecrirePrefs } from './ui/
 const app = document.getElementById('app')!;
 let utilisateur: Utilisateur | null = null;
 let reseau: Reseau | null = null;
-let table: EcranTable | EcranBJ | null = null;
+let table: EcranTable | EcranBJ | EcranRoulette | null = null;
 let hall: EcranHall | null = null;
 let ecouteReseau: (() => void) | null = null;
 let horsLigne = false;
@@ -106,7 +108,7 @@ function surMessage(m: MessageServeur) {
     // (Re)connexion : la demande de liste a pu partir avant l'ouverture du WebSocket
     case 'bienvenue': if (hall) reseau?.envoyer({ type: 'hall' }); break;
     case 'succes': annoncerSucces(m.succes); break;
-    case 'entre': if (m.jeu === 'blackjack') allerBJEnLigne(); else allerTableEnLigne(); break;
+    case 'entre': if (m.jeu === 'blackjack') allerBJEnLigne(); else if (m.jeu === 'roulette') allerRouletteEnLigne(); else allerTableEnLigne(); break;
     case 'sorti': if (m.raison) toast(m.raison, true); if (table) { fermerTable(); allerHall(); } break;
     case 'erreur':
       toast(m.texte, true);
@@ -146,6 +148,7 @@ function allerCreation() {
     onRetour: () => allerHall(),
     onValider: (reglages) => { debloquerSon(); reseau?.envoyer({ type: 'creer', jeu: 'poker', reglages }); },
     onValiderBJ: (reglages) => { debloquerSon(); reseau?.envoyer({ type: 'creer', jeu: 'blackjack', reglages }); },
+    onValiderRoulette: (reglages) => { debloquerSon(); reseau?.envoyer({ type: 'creer', jeu: 'roulette', reglages }); },
   });
 }
 
@@ -184,7 +187,7 @@ function allerTableEnLigne() {
   if (table) return; // déjà à table (reconnexion)
   const r = reseau;
   const ecouteurs = new Set<(m: MessageSalle) => void>();
-  const stop = r.ecouter((m) => { if (m.type === 'salle' && m.msg.type !== 'majBJ') ecouteurs.forEach((f) => f(m.msg as MessageSalle)); });
+  const stop = r.ecouter((m) => { if (m.type === 'salle' && m.msg.type !== 'majBJ' && m.msg.type !== 'majRoulette') ecouteurs.forEach((f) => f(m.msg as MessageSalle)); });
   const canal: Canal = {
     enLigne: true,
     envoyer: (cmd) => r.envoyer({ type: 'cmd', cmd }),
@@ -203,7 +206,7 @@ function allerBJEnLigne() {
   if (table) return;
   const r = reseau;
   const ecouteurs = new Set<(m: MessageBJ) => void>();
-  const stop = r.ecouter((m) => { if (m.type === 'salle' && m.msg.type !== 'maj' && m.msg.type !== 'historique') ecouteurs.forEach((f) => f(m.msg as MessageBJ)); });
+  const stop = r.ecouter((m) => { if (m.type === 'salle' && m.msg.type !== 'maj' && m.msg.type !== 'historique' && m.msg.type !== 'majRoulette') ecouteurs.forEach((f) => f(m.msg as MessageBJ)); });
   const canal: CanalBJ = {
     enLigne: true,
     envoyer: (cmd) => r.envoyer({ type: 'cmd', cmd }),
@@ -211,6 +214,22 @@ function allerBJEnLigne() {
     brancher: (f) => { ecouteurs.add(f); return () => { ecouteurs.delete(f); }; },
   };
   table = new EcranBJ(app, canal, () => { stop(); table = null; allerHall(); });
+}
+
+function allerRouletteEnLigne() {
+  if (!reseau) return;
+  hall = null;
+  if (table) return;
+  const r = reseau;
+  const ecouteurs = new Set<(m: MessageRoulette) => void>();
+  const stop = r.ecouter((m) => { if (m.type === 'salle' && m.msg.type !== 'maj' && m.msg.type !== 'historique' && m.msg.type !== 'majBJ') ecouteurs.forEach((f) => f(m.msg as MessageRoulette)); });
+  const canal: CanalRoulette = {
+    enLigne: true,
+    envoyer: (cmd) => r.envoyer({ type: 'cmd', cmd }),
+    quitter: () => { r.envoyer({ type: 'quitter' }); stop(); },
+    brancher: (f) => { ecouteurs.add(f); return () => { ecouteurs.delete(f); }; },
+  };
+  table = new EcranRoulette(app, canal, () => { stop(); table = null; allerHall(); });
 }
 
 /* ------------------------------ Solo ------------------------------ */
@@ -231,6 +250,7 @@ function allerSolo() {
     onRetour: () => (utilisateur ? allerHall() : allerConnexion()),
     onValider: (reglages) => { debloquerSon(); lancerSolo(reglages); },
     onValiderBJ: (reglages) => { debloquerSon(); lancerSoloBJ(reglages); },
+    onValiderRoulette: (reglages) => { debloquerSon(); lancerSoloRoulette(reglages); },
   });
 }
 
@@ -265,6 +285,23 @@ function lancerSoloBJ(reglages: ReglagesBJ) {
     brancher: (f) => { ecouteurs.add(f); salle.diffuser(); return () => { ecouteurs.delete(f); }; },
   };
   table = new EcranBJ(app, canal, () => { table = null; utilisateur ? allerHall() : allerConnexion(); });
+  salle.commande(moi.id, { c: 'lancer' });
+}
+
+function lancerSoloRoulette(reglages: ReglagesRoulette) {
+  const moi: Membre = { id: 'moi', nom: utilisateur?.pseudo ?? 'Toi', avatar: avatarSolo() };
+  const ecouteurs = new Set<(m: MessageRoulette) => void>();
+  const salle = new SalleRoulette({
+    id: 'solo', code: 'SOLO', hote: moi, reglages,
+    sortie: { envoyer: (id, m) => { if (id === moi.id) queueMicrotask(() => ecouteurs.forEach((f) => f(m))); } },
+  });
+  const canal: CanalRoulette = {
+    enLigne: false,
+    envoyer: (cmd) => salle.commande(moi.id, cmd),
+    quitter: () => salle.arreter(),
+    brancher: (f) => { ecouteurs.add(f); salle.diffuser(); return () => { ecouteurs.delete(f); }; },
+  };
+  table = new EcranRoulette(app, canal, () => { table = null; utilisateur ? allerHall() : allerConnexion(); });
   salle.commande(moi.id, { c: 'lancer' });
 }
 
