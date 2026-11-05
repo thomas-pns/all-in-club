@@ -15,6 +15,8 @@ import { listeSucces, CADRES, DOS } from '../moteur/succes.js';
 import { Donnees } from './donnees.js';
 import { Notifications } from './notifications.js';
 import { Portefeuilles, ErreurPortefeuille } from './portefeuille.js';
+import { Kiosque } from './kiosque.js';
+import { TICKETS, KENO, KENO_GAINS, LOTO, LOTO_GAINS } from '../moteur/kiosque.js';
 
 export const VERSION = '0.2.0';
 
@@ -46,6 +48,9 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   const comptes = new Comptes(o.db);
   const donnees = new Donnees(o.db);
   const portefeuilles = new Portefeuilles(o.db);
+  const kiosque = new Kiosque(o.db, portefeuilles);
+  kiosque.demarrer();
+  app.addHook('onClose', async () => kiosque.arreter());
   const notifications = new Notifications(o.db, o.urlPublique ?? 'mailto:admin@all-in-club.invalid');
   const hall = new Hall(donnees, notifications);
   hall.restaurer();
@@ -90,6 +95,22 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   app.get('/api/portefeuille/mouvements', async (req) => ({ mouvements: portefeuilles.mouvements(exigerUtilisateur(req).id) }));
   app.post('/api/portefeuille/bonus', async (req) => portefeuilles.encaisserBonus(exigerUtilisateur(req).id));
   app.post('/api/portefeuille/coup-de-pouce', async (req) => portefeuilles.coupDePouce(exigerUtilisateur(req).id));
+  /* Le Kiosque : tickets à gratter, Keno, Loto Flash */
+  app.get('/api/kiosque', async () => ({
+    tickets: Object.values(TICKETS).map(({ type, nom, prix, regle, gains }) => ({ type, nom, prix, regle, lotMax: Math.max(...gains.map(([g]) => g)) })),
+    keno: { ...KENO, gains: KENO_GAINS }, loto: { ...LOTO, gains: LOTO_GAINS },
+  }));
+  app.post('/api/kiosque/ticket', async (req) => {
+    const b = (req.body ?? {}) as { type?: string; offert?: boolean };
+    return kiosque.acheterTicket(exigerUtilisateur(req).id, String(b.type) as any, !!b.offert);
+  });
+  app.get('/api/kiosque/keno', async (req) => kiosque.etatKeno(exigerUtilisateur(req).id));
+  app.get('/api/kiosque/keno/:id', async (req) => { exigerUtilisateur(req); return { tirage: kiosque.tirageKeno(Number((req.params as any).id)) }; });
+  app.post('/api/kiosque/keno', async (req) => { const b = (req.body ?? {}) as any; return kiosque.jouerKeno(exigerUtilisateur(req).id, b.numeros, b.mise, b.tirages); });
+  app.get('/api/kiosque/loto', async (req) => kiosque.etatLoto(exigerUtilisateur(req).id));
+  app.get('/api/kiosque/loto/:id', async (req) => { exigerUtilisateur(req); return { tirage: kiosque.tirageLoto(Number((req.params as any).id)) }; });
+  app.post('/api/kiosque/loto', async (req) => { const b = (req.body ?? {}) as any; return kiosque.jouerLoto(exigerUtilisateur(req).id, b.numeros, b.etoile); });
+
   app.get('/api/classement', async (req) => { exigerUtilisateur(req); return { joueurs: portefeuilles.classement() }; });
 
   app.get('/api/joueurs/:pseudo', async (req) => {

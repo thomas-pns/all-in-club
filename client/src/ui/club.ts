@@ -12,6 +12,8 @@ import { fmt } from '../art/rendu';
 import { avatarSVG } from '../art/avatars';
 import { jouerSon } from '../vue/son';
 import { $, $$, esc, html, toast, panneau, avatar } from './commun';
+import { vueVitrine, vueTicket, vueKeno, vueLoto, ContexteKiosque } from './kiosque';
+import type { TypeTicket } from '../../../moteur/kiosque';
 
 export interface ActionsHall {
   creer: (jeu?: JeuCasino) => void;
@@ -27,7 +29,7 @@ interface EtatPortefeuille { solde: number; tickets: number; bonus: EtatBonus & 
 
 type Onglet = 'club' | 'kiosque' | 'classement';
 /** On revient là où on était en quittant une table. */
-let memoire: { onglet: Onglet; jeu: JeuCasino | null } = { onglet: 'club', jeu: null };
+let memoire: { onglet: Onglet; jeu: JeuCasino | null; vueK?: string | null } = { onglet: 'club', jeu: null };
 
 const NOMS: Record<JeuCasino, string> = { poker: 'Poker', blackjack: 'Black Jack', roulette: 'Roulette' };
 const ICONE_ROULETTE = '<svg width="28" height="28" viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="15" fill="none" stroke="#FF6B5B" stroke-width="7" stroke-dasharray="5 4"/><circle cx="23" cy="23" r="7" fill="#FFC23D"/></svg>';
@@ -46,6 +48,7 @@ export class EcranHall {
   private enLigne = 0;
   private porte: EtatPortefeuille | null = null;
   private rang: number | null = null;
+  private arrets: (() => void)[] = [];
 
   constructor(racine: HTMLElement, private u: Utilisateur, private a: ActionsHall) {
     this.el = html(`<div class="club">
@@ -81,6 +84,7 @@ export class EcranHall {
       this.porte = await api<EtatPortefeuille>('/api/portefeuille');
       $('[data-solde]', this.el).textContent = fmt(this.porte.solde);
       if (memoire.onglet === 'club' && !memoire.jeu) this.majAnnonces();
+      if (memoire.onglet === 'kiosque' && !memoire.vueK) this.afficher();
     } catch { $('[data-solde]', this.el).textContent = '—'; }
   }
 
@@ -96,10 +100,18 @@ export class EcranHall {
   /* ------------------------------ Onglets ------------------------------ */
 
   private afficher() {
+    this.arrets.splice(0).forEach((f) => f());
     $$('[data-onglet]', this.el).forEach((b) => b.classList.toggle('on', b.dataset.onglet === memoire.onglet));
     const c = $('[data-contenu]', this.el);
     c.scrollTop = 0;
-    if (memoire.onglet === 'kiosque') return this.vueKiosque(c);
+    if (memoire.onglet === 'kiosque') {
+      const v = memoire.vueK ?? 'kiosque';
+      const ctx = this.contexteKiosque();
+      if (v.startsWith('ticket:')) { const [, t, o] = v.split(':'); return vueTicket(c, ctx, t as TypeTicket, o === 'offert'); }
+      if (v === 'keno') return vueKeno(c, ctx);
+      if (v === 'loto') return vueLoto(c, ctx);
+      return vueVitrine(c, ctx);
+    }
     if (memoire.onglet === 'classement') return void this.vueClassement(c);
     if (memoire.jeu) return this.vueSalle(c, memoire.jeu);
     this.vuePlan(c);
@@ -124,7 +136,7 @@ export class EcranHall {
           <span class="auvent"></span>
           <span class="vitrine"><b>Kiosque</b>
             <span class="mini-ticket"><i></i><i class="g"></i><i></i><i class="g"></i><i></i><i class="g"></i></span>
-            <small>grattage, keno, loto flash</small><span class="bientot">bientôt</span></span>
+            <small>grattage, keno, loto flash</small><span class="bientot">ouvert</span></span>
         </button>
         <button class="salon-prive" data-salon>Salon privé : une table entre potes</button>
       </div>
@@ -199,9 +211,9 @@ export class EcranHall {
     setTimeout(() => { const pm = $('[data-porte]', this.el); pm.classList.remove('tinte'); void pm.offsetWidth; pm.classList.add('tinte'); jouerSon('jetons'); }, 900);
   }
 
-  private compterJusqua(de: number, a: number) {
+  private compterJusqua(de: number, a: number, delai = 700) {
     const el = $('[data-solde]', this.el);
-    const debut = performance.now() + 700, duree = 900;
+    const debut = performance.now() + delai, duree = 900;
     const pas = () => {
       const t = Math.min(1, Math.max(0, (performance.now() - debut) / duree));
       el.textContent = fmt(Math.round(de + (a - de) * (1 - (1 - t) ** 3)));
@@ -217,7 +229,7 @@ export class EcranHall {
     const jourFait = (i: number) => (p.bonus.dispo ? i < p.bonus.jour - 1 : i < p.bonus.jour);
     const pn = panneau(`<h2>Mon portefeuille</h2>
       <div class="solde-grand"><span class="piece">♣</span><b>${fmt(p.solde)}</b><small>Clubs</small></div>
-      <p class="doux petit" style="text-align:center;margin:4px 0 14px">Argent fictif du Club : il ne s'achète pas et ne se retire jamais.${p.tickets ? ` · ${p.tickets} ticket${p.tickets > 1 ? 's' : ''} à gratter offert${p.tickets > 1 ? 's' : ''} (le Kiosque arrive bientôt)` : ''}</p>
+      <p class="doux petit" style="text-align:center;margin:4px 0 14px">Argent fictif du Club : il ne s'achète pas et ne se retire jamais.${p.tickets ? ` · ${p.tickets} ticket${p.tickets > 1 ? 's' : ''} à gratter offert${p.tickets > 1 ? 's' : ''} (des Morpion gratuits au Kiosque)` : ''}</p>
       <h3 style="margin-bottom:8px">Bonus du jour</h3>
       <p class="doux petit" style="margin:0 0 10px">Connecte-toi chaque jour : un coffre tous les 3 jours, le grand coffre le 7e. Rate un jour et la série repart au jour 1.</p>
       <div class="calendrier">${p.bonus.calendrier.map((r, i) => `<div class="jour ${jourFait(i) ? 'fait' : ''} ${p.bonus.dispo && i === p.bonus.jour - 1 ? 'auj' : ''} ${i === 6 ? 'large' : ''}">
@@ -260,22 +272,20 @@ export class EcranHall {
     f.onsubmit = (e) => { e.preventDefault(); this.a.rejoindreCode((f.code as HTMLInputElement).value.trim().toUpperCase()); p.fermer(); };
   }
 
-  private vueKiosque(c: HTMLElement) {
-    const t = this.porte?.tickets ?? 0;
-    c.innerHTML = `<div class="kiosque-vue">
-      <h1 style="font-size:26px;margin-bottom:10px">Le Kiosque</h1>
-      <div class="auvent-large"></div>
-      <div class="bandeau-ville"><b>Il ouvre bientôt !</b><span>Tickets à gratter, Keno et Loto Flash, à jouer avec tes Clubs ♣ pour en regagner entre deux parties.${t ? ` Tu as déjà ${t} ticket${t > 1 ? 's' : ''} offert${t > 1 ? 's' : ''} qui t'attend${t > 1 ? 'ent' : ''}.` : ''}</span></div>
-      <h3 class="titre-rubrique">Tickets à gratter</h3>
-      <div class="rangee-tickets">
-        <div class="ticket t-morpion"><b>Morpion</b><span class="zone-grattage">Aligne 3 ♣</span><small>200 ♣</small></div>
-        <div class="ticket t-numeros"><b>Numéros Gagnants</b><span class="zone-grattage">Tes numéros = les gagnants ?</span><small>500 ♣</small></div>
-        <div class="ticket t-mots"><b>Mots Croisés</b><span class="zone-grattage">Forme des mots</span><small>1 000 ♣</small></div>
-      </div>
-      <h3 class="titre-rubrique">Tirages en direct</h3>
-      <div class="tirage-carte keno"><b>Keno du Club</b><span>Coche 1 à 10 numéros sur 70 · un tirage toutes les 4 minutes</span></div>
-      <div class="tirage-carte loto"><b>Loto Flash</b><span>5 numéros + 1 étoile · cagnotte commune · toutes les 10 minutes</span></div>
-    </div>`;
+  private contexteKiosque(): ContexteKiosque {
+    return {
+      porte: () => this.porte,
+      majPorte: (e, affiche) => {
+        const avant = Number(($('[data-solde]', this.el).textContent ?? '0').replace(/\D/g, '')) || 0;
+        this.porte = { ...(this.porte as EtatPortefeuille), ...(e as Partial<EtatPortefeuille>) };
+        const cible = affiche ?? e.solde;
+        if (cible > avant) this.compterJusqua(avant, cible, 0);
+        else $('[data-solde]', this.el).textContent = fmt(cible);
+      },
+      aller: (v) => { memoire = { onglet: 'kiosque', jeu: null, vueK: v === 'kiosque' ? null : v }; this.afficher(); },
+      celebrer: (el, n) => this.pluieDePieces(el, n),
+      nettoyer: (f) => this.arrets.push(f),
+    };
   }
 
   private async vueClassement(c: HTMLElement) {

@@ -90,6 +90,12 @@ export class Portefeuilles {
     return this.etat(u);
   }
 
+  utiliserTicketOffert(u: number) {
+    const l = this.ligne(u);
+    if (l.tickets <= 0) throw new ErreurPortefeuille('Aucun ticket offert');
+    this.db.prepare('UPDATE portefeuilles SET tickets = tickets - 1 WHERE utilisateur = ?').run(u);
+  }
+
   mouvements(u: number, n = 30) {
     return this.db.prepare('SELECT date, montant, motif, solde FROM mouvements WHERE utilisateur = ? ORDER BY id DESC LIMIT ?').all(u, n) as { date: number; montant: number; motif: string; solde: number }[];
   }
