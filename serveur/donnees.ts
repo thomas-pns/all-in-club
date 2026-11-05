@@ -37,6 +37,7 @@ export function migrer(db: Base) {
       PRIMARY KEY (main, utilisateur)
     );
     CREATE INDEX IF NOT EXISTS mains_joueurs_utilisateur ON mains_joueurs(utilisateur, main);
+    CREATE TABLE IF NOT EXISTS casino_tables (id TEXT PRIMARY KEY, jeu TEXT NOT NULL, ville TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS salles (
       id TEXT PRIMARY KEY,
       json TEXT NOT NULL,
@@ -182,6 +183,11 @@ export class Donnees {
     this.db.prepare('INSERT INTO salles (id, json, maj) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json, maj = excluded.maj')
       .run(s.id, JSON.stringify(s), Date.now());
   }
+
+  /* Tables du Casino (par ville) */
+  casinoTables() { return this.db.prepare('SELECT id, jeu, ville FROM casino_tables').all() as { id: string; jeu: string; ville: string }[]; }
+  ajouterCasino(id: string, jeu: string, ville: string) { this.db.prepare('INSERT OR REPLACE INTO casino_tables (id, jeu, ville) VALUES (?, ?, ?)').run(id, jeu, ville); }
+  retirerCasino(id: string) { this.db.prepare('DELETE FROM casino_tables WHERE id = ?').run(id); }
 
   supprimerSalle(id: string) {
     this.db.prepare('DELETE FROM salles WHERE id = ?').run(id);

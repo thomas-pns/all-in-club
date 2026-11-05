@@ -12,7 +12,8 @@ hors ligne. Hébergé sur un NAS Synology.
 à 17, assurance, doubler, séparer, abandon, bouton « Conseil » (stratégie de base) et règles expliquées en jeu.
 **Le Club** : un portefeuille en Clubs ♣ (argent fictif) par compte, bonus du jour sur 7 jours, coup de pouce,
 classement des plus riches, et **le Kiosque** : tickets à gratter (Morpion, Numéros Gagnants, Mots Croisés),
-Keno toutes les 4 minutes et Loto Flash toutes les 10 minutes avec cagnotte commune.
+Keno toutes les 4 minutes et Loto Flash toutes les 10 minutes avec cagnotte commune. **Le Casino** : tables par ville
+(Le Bistrot, Las Vegas, Monaco, Macao) où la cave est prise sur le portefeuille et les jetons y reviennent.
 **Roulette** : un seul zéro, la partage, toutes les mises du tapis (plein, cheval, transversale, carré, sixain,
 douzaines, colonnes, chances simples), cylindre et bille animés, jusqu'à 6 joueurs avec leurs jetons de couleur.
 
@@ -56,7 +57,7 @@ nouveau venu qui attend la grosse blinde ou la paie pour entrer.
 
 ```bash
 npm install
-npm test          # 122 tests, dont 100 000 mains aléatoires simulées et une partie en ligne de bout en bout
+npm test          # 124 tests, dont 100 000 mains aléatoires simulées et une partie en ligne de bout en bout
 npm run typecheck
 ```
 

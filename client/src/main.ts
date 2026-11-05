@@ -106,11 +106,11 @@ function connecte(u: Utilisateur, jeton: string) {
 
 function surMessage(m: MessageServeur) {
   switch (m.type) {
-    case 'hall': hall?.majTables(m.tables, m.enLigne); break;
+    case 'hall': hall?.majTables(m.tables, m.enLigne, m.villes); break;
     // (Re)connexion : la demande de liste a pu partir avant l'ouverture du WebSocket
     case 'bienvenue': if (hall) reseau?.envoyer({ type: 'hall' }); break;
     case 'succes': annoncerSucces(m.succes); break;
-    case 'entre': if (m.jeu === 'blackjack') allerBJEnLigne(); else if (m.jeu === 'roulette') allerRouletteEnLigne(); else allerTableEnLigne(); break;
+    case 'entre': if (m.jeu === 'blackjack') allerBJEnLigne(m.casino); else if (m.jeu === 'roulette') allerRouletteEnLigne(m.casino); else allerTableEnLigne(m.casino); break;
     case 'sorti': if (m.raison) toast(m.raison, true); if (table) { fermerTable(); allerHall(); } break;
     case 'erreur':
       toast(m.texte, true);
@@ -138,6 +138,7 @@ function allerHall() {
     solo: (jeu) => allerSolo(jeu),
     profil: () => allerProfil(),
     joueurs: () => allerJoueurs(),
+    casino: (jeu, ville) => { debloquerSon(); r.envoyer({ type: 'casino', jeu, ville }); },
   });
   r.envoyer({ type: 'hall' });
 }
@@ -184,7 +185,7 @@ async function deconnexion() {
 
 /* ------------------------------ Tables ------------------------------ */
 
-function allerTableEnLigne() {
+function allerTableEnLigne(casino?: string) {
   if (!reseau) return;
   hall = null;
   if (table) return; // déjà à table (reconnexion)
@@ -193,6 +194,7 @@ function allerTableEnLigne() {
   const stop = r.ecouter((m) => { if (m.type === 'salle' && m.msg.type !== 'majBJ' && m.msg.type !== 'majRoulette') ecouteurs.forEach((f) => f(m.msg as MessageSalle)); });
   const canal: Canal = {
     enLigne: true,
+    casino,
     envoyer: (cmd) => r.envoyer({ type: 'cmd', cmd }),
     quitter: () => { r.envoyer({ type: 'quitter' }); stop(); },
     brancher: (f) => { ecouteurs.add(f); return () => { ecouteurs.delete(f); }; },
@@ -203,7 +205,7 @@ function allerTableEnLigne() {
   });
 }
 
-function allerBJEnLigne() {
+function allerBJEnLigne(casino?: string) {
   if (!reseau) return;
   hall = null;
   if (table) return;
@@ -212,6 +214,7 @@ function allerBJEnLigne() {
   const stop = r.ecouter((m) => { if (m.type === 'salle' && m.msg.type !== 'maj' && m.msg.type !== 'historique' && m.msg.type !== 'majRoulette') ecouteurs.forEach((f) => f(m.msg as MessageBJ)); });
   const canal: CanalBJ = {
     enLigne: true,
+    casino,
     envoyer: (cmd) => r.envoyer({ type: 'cmd', cmd }),
     quitter: () => { r.envoyer({ type: 'quitter' }); stop(); },
     brancher: (f) => { ecouteurs.add(f); return () => { ecouteurs.delete(f); }; },
@@ -219,7 +222,7 @@ function allerBJEnLigne() {
   table = new EcranBJ(app, canal, () => { stop(); table = null; allerHall(); });
 }
 
-function allerRouletteEnLigne() {
+function allerRouletteEnLigne(casino?: string) {
   if (!reseau) return;
   hall = null;
   if (table) return;
@@ -228,6 +231,7 @@ function allerRouletteEnLigne() {
   const stop = r.ecouter((m) => { if (m.type === 'salle' && m.msg.type !== 'maj' && m.msg.type !== 'historique' && m.msg.type !== 'majBJ') ecouteurs.forEach((f) => f(m.msg as MessageRoulette)); });
   const canal: CanalRoulette = {
     enLigne: true,
+    casino,
     envoyer: (cmd) => r.envoyer({ type: 'cmd', cmd }),
     quitter: () => { r.envoyer({ type: 'quitter' }); stop(); },
     brancher: (f) => { ecouteurs.add(f); return () => { ecouteurs.delete(f); }; },

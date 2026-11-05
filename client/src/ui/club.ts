@@ -14,6 +14,7 @@ import { jouerSon } from '../vue/son';
 import { $, $$, esc, html, toast, panneau, avatar } from './commun';
 import { vueVitrine, vueTicket, vueKeno, vueLoto, ContexteKiosque } from './kiosque';
 import type { TypeTicket } from '../../../moteur/kiosque';
+import { VILLES, Ville } from '../../../moteur/casino';
 
 export interface ActionsHall {
   creer: (jeu?: JeuCasino) => void;
@@ -23,6 +24,7 @@ export interface ActionsHall {
   solo: (jeu?: JeuCasino) => void;
   profil: () => void;
   joueurs: () => void;
+  casino: (jeu: JeuCasino, ville: string) => void;
 }
 
 interface EtatPortefeuille { solde: number; tickets: number; bonus: EtatBonus & { calendrier: Recompense[] }; coupDePouce: boolean }
@@ -46,6 +48,7 @@ export class EcranHall {
   el: HTMLElement;
   private tables: ResumeTable[] = [];
   private enLigne = 0;
+  private villes: Record<string, number> = {};
   private porte: EtatPortefeuille | null = null;
   private rang: number | null = null;
   private arrets: (() => void)[] = [];
@@ -83,6 +86,7 @@ export class EcranHall {
     try {
       this.porte = await api<EtatPortefeuille>('/api/portefeuille');
       $('[data-solde]', this.el).textContent = fmt(this.porte.solde);
+      this.majVilles();
       if (memoire.onglet === 'club' && !memoire.jeu) this.majAnnonces();
       if (memoire.onglet === 'kiosque' && !memoire.vueK) this.afficher();
     } catch { $('[data-solde]', this.el).textContent = '—'; }
@@ -246,7 +250,11 @@ export class EcranHall {
     c.innerHTML = `<div class="salle-jeu">
       <div class="ligne" style="gap:10px;margin-bottom:12px"><button class="btn btn-rond btn-fantome" data-retour aria-label="Retour au Club">←</button><h1 style="font-size:24px">Le Casino</h1></div>
       <div class="segments">${(['poker', 'blackjack', 'roulette'] as JeuCasino[]).map((j) => `<button data-seg="${j}" class="${j === jeu ? 'on' : ''}">${NOMS[j]}</button>`).join('')}</div>
-      <div class="bandeau-ville"><b>Bientôt : les tables par ville</b><span>Du Bistrot à Macao, on y jouera avec tes Clubs ♣. Pour l'instant, les tables sont entre potes : jetons offerts, ton portefeuille n'est pas touché.</span></div>
+      <h3 class="titre-rubrique" style="margin-top:4px">Le Casino · avec tes Clubs ♣</h3>
+      <p class="doux petit" style="margin:0 0 10px">La cave est prélevée sur ton portefeuille. En te levant, tes jetons y retournent.</p>
+      <div class="villes" data-villes></div>
+      <h3 class="titre-rubrique">Entre potes · jetons offerts</h3>
+      <p class="doux petit" style="margin:0 0 10px">Rien en jeu : ton portefeuille n'est pas touché.</p>
       <div class="actions-salle">
         <button class="btn btn-or" data-creer>＋ Créer une table</button>
         <button class="btn btn-ciel" data-code>Rejoindre avec un code</button>
@@ -260,6 +268,7 @@ export class EcranHall {
     $('[data-creer]', c).onclick = () => this.a.creer(jeu);
     $('[data-solo]', c).onclick = () => this.a.solo(jeu);
     $('[data-code]', c).onclick = () => this.demanderCode();
+    this.majVilles();
     this.majListe();
   }
 
@@ -303,9 +312,11 @@ export class EcranHall {
 
   /* ------------------------------ Tables ouvertes ------------------------------ */
 
-  majTables(tables: ResumeTable[], enLigne: number) {
+  majTables(tables: ResumeTable[], enLigne: number, villes: Record<string, number> = {}) {
     this.tables = tables;
     this.enLigne = enLigne;
+    this.villes = villes;
+    this.majVilles();
     this.majListe();
     this.majComptes();
   }
@@ -320,6 +331,24 @@ export class EcranHall {
     }
     const e = $('[data-enligne]', this.el);
     if (e) e.textContent = `${this.enLigne} joueur${this.enLigne > 1 ? 's' : ''} connecté${this.enLigne > 1 ? 's' : ''}`;
+  }
+
+  /** Les villes du Casino pour le jeu choisi. */
+  private majVilles() {
+    const zone = $('[data-villes]', this.el);
+    const jeu = memoire.jeu;
+    if (!zone || !jeu) return;
+    const solde = this.porte?.solde ?? 0;
+    const enjeux = (v: Ville) => jeu === 'poker' ? `Blindes ${fmt(v.poker.pb)} / ${fmt(v.poker.pb * 2)}` : jeu === 'blackjack' ? `Mise ${fmt(v.blackjack.miseMin)} à ${fmt(v.blackjack.miseMax)}` : `Jeton min. ${fmt(v.roulette.miseMin)}`;
+    zone.innerHTML = VILLES.map((v) => {
+      const cave = v[jeu].cave, manque = cave - solde, n = this.villes[`${jeu}:${v.id}`] ?? 0;
+      return `<div class="ville ${manque > 0 ? 'fermee' : ''}" style="--c:${v.couleur}">
+        <span class="skyline ville-${v.id}" aria-hidden="true"></span>
+        <span class="infos-ville"><b>${v.nom}</b><small>${enjeux(v)} · cave ${clubs(cave)}</small>
+          <small class="doux">${manque > 0 ? `Il te manque ${clubs(manque)}` : n ? `${n} joueur${n > 1 ? 's' : ''} à table` : esc(v.accroche)}</small></span>
+        <button class="btn btn-petit ${manque > 0 ? '' : 'btn-or'}" data-ville="${v.id}" ${manque > 0 ? 'disabled' : ''}>S'asseoir</button></div>`;
+    }).join('');
+    $$('[data-ville]', zone).forEach((b) => b.onclick = () => { jouerSon('jetons'); this.a.casino(jeu, b.dataset.ville!); });
   }
 
   private majListe() {

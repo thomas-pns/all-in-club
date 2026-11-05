@@ -771,3 +771,18 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .bareme-loto div { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 700; padding: 3px 0; }
 .bareme-loto b { color: var(--or); }
 @media (max-width: 600px) { .grille-loto { grid-template-columns: repeat(7, 1fr); } }
+
+/* Le Casino : les villes */
+.villes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.ville { display: flex; align-items: center; gap: 12px; background: var(--nuit2); border: 3px solid var(--trait); border-radius: 18px; padding: 0 12px 0 0; overflow: hidden; box-shadow: 0 5px 0 var(--trait); min-height: 76px; }
+.ville.fermee { opacity: .6; }
+.ville .skyline { width: 76px; align-self: stretch; flex: none; background: var(--c); border-right: 3px solid var(--trait); position: relative; }
+.ville .skyline::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 10px; height: 40px; background: var(--trait); }
+.ville-bistrot::after { clip-path: polygon(0 100%, 0 45%, 20% 45%, 20% 20%, 42% 20%, 42% 60%, 62% 60%, 62% 30%, 82% 30%, 82% 50%, 100% 50%, 100% 100%); }
+.ville-vegas::after { clip-path: polygon(0 100%, 0 40%, 18% 40%, 18% 0, 30% 0, 30% 25%, 46% 25%, 46% 10%, 60% 10%, 60% 45%, 78% 45%, 78% 20%, 100% 20%, 100% 100%); }
+.ville-monaco::after { clip-path: polygon(0 100%, 0 70%, 14% 70%, 14% 35%, 34% 35%, 34% 70%, 44% 70%, 50% 5%, 56% 70%, 70% 70%, 70% 45%, 90% 45%, 90% 70%, 100% 70%, 100% 100%); }
+.ville-macao::after { clip-path: polygon(0 100%, 0 30%, 18% 30%, 18% 60%, 30% 60%, 30% 0, 46% 0, 46% 50%, 58% 50%, 58% 15%, 74% 15%, 74% 40%, 100% 40%, 100% 100%); }
+.ville .infos-ville { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px 0; }
+.ville .infos-ville b { font-family: Fredoka; font-weight: 600; font-size: 18px; }
+.ville .infos-ville small { font-size: 12.5px; font-weight: 800; }
+.ville .btn { flex: none; }

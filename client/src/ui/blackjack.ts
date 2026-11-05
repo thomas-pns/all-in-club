@@ -19,6 +19,8 @@ export interface CanalBJ {
   quitter(): void;
   brancher(f: (m: MessageBJ) => void): () => void;
   enLigne: boolean;
+  /** Table du Casino : on y joue ses Clubs ♣ (nom de la ville). */
+  casino?: string;
 }
 
 const NOMS_ACTIONS: Record<ActionBJ, string> = { tirer: 'Tirer', rester: 'Rester', doubler: 'Doubler', separer: 'Séparer', abandonner: 'Abandon' };
@@ -166,6 +168,7 @@ export class EcranBJ {
     const r = e.reglages;
     $('[data-nom]', this.el).textContent = r.nom;
     const infos = [`Mise ${fmt(r.miseMin)} à ${fmt(r.miseMax)}`];
+    if (this.canal.casino) infos.unshift('♣ en Clubs');
     if (e.numeroManche) infos.push(r.manches ? `Manche ${e.numeroManche}/${r.manches}` : `Manche ${e.numeroManche}`);
     if (e.spectateurs.length) infos.push(`👁 ${e.spectateurs.length}`);
     $('[data-infos]', this.el).textContent = infos.join(' · ');
@@ -464,7 +467,7 @@ export class EcranBJ {
 
   private async quitter() {
     const e = this.etat;
-    if (e && e.monSiege !== null && e.statut === 'en_jeu' && !(await confirmer('Quitter la table ?', 'Quitter', 'Rester'))) return;
+    if (e && e.monSiege !== null && e.statut === 'en_jeu' && !(await confirmer(this.canal.casino ? 'Quitter la table ? Tes jetons retournent dans ton portefeuille.' : 'Quitter la table ?', 'Quitter', 'Rester'))) return;
     this.sortir();
   }
 
@@ -477,7 +480,7 @@ export class EcranBJ {
     const hote = e.hote === e.moi;
     const p = panneau(`<h2>Menu</h2>
       <div style="display:flex;flex-direction:column;gap:10px">
-        ${hote ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
+        ${hote && !this.canal.casino ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
         <button class="btn" data-m="regles">Comment jouer ?</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
         ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}

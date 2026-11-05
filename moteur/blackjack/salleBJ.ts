@@ -29,13 +29,13 @@ export const REGLAGES_BJ_DEFAUT: Omit<ReglagesBJ, 'nom'> = {
 
 export function validerBJ(r: ReglagesBJ): ReglagesBJ {
   const ent = (x: unknown, min: number, max: number, def: number) => { const n = Math.floor(Number(x)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def; };
-  const miseMin = ent(r.miseMin, 1, 1000, 10);
+  const miseMin = ent(r.miseMin, 1, 100_000, 10);
   return {
     nom: String(r.nom ?? 'Black Jack').trim().slice(0, 30) || 'Black Jack',
     visibilite: r.visibilite === 'privee' ? 'privee' : 'publique',
-    tapisDepart: ent(r.tapisDepart, 100, 100_000, 1000),
+    tapisDepart: ent(r.tapisDepart, 100, 10_000_000, 1000),
     miseMin,
-    miseMax: Math.max(miseMin, ent(r.miseMax, miseMin, 100_000, miseMin * 50)),
+    miseMax: Math.max(miseMin, ent(r.miseMax, miseMin, 10_000_000, miseMin * 50)),
     places: ent(r.places, 1, 6, 6),
     recaves: r.recaves === 'illimitees' || r.recaves === 'interdites' ? r.recaves : ent(r.recaves, 1, 5, 2),
     manches: ent(r.manches, 0, 500, 30),

@@ -19,6 +19,8 @@ export interface Canal {
   quitter(): void;
   brancher(f: (m: MessageSalle) => void): () => void;
   enLigne: boolean;
+  /** Table du Casino : on y joue ses Clubs ♣ (nom de la ville). */
+  casino?: string;
 }
 
 type PreAction = 'parole_couche' | 'parole' | 'suivre_tout' | null;
@@ -181,6 +183,7 @@ export class EcranTable {
     const r = e.reglages;
     $('[data-nom]', this.el).textContent = r.nom;
     const infos = [`Blindes ${fmt(r.pb)}/${fmt(r.gb)}`];
+    if (this.canal.casino) infos.unshift('♣ en Clubs');
     if (e.numeroMain) infos.push(`Main ${e.numeroMain}`);
     if (e.finPrevue !== null) infos.push(`Fin dans ${Math.ceil(e.finPrevue / 60000)} min`);
     if (e.spectateurs.length) infos.push(`👁 ${e.spectateurs.length}`);
@@ -201,6 +204,10 @@ export class EcranTable {
     if (e.statut !== 'attente' && e.statut !== 'pause') { c?.remove(); return; }
     if (!c) { c = html('<div class="attente-centre"></div>'); zone.appendChild(c); }
     const nb = e.sieges.filter(Boolean).length;
+    if (this.canal.casino) {
+      c.innerHTML = `<h2>En attente d'un adversaire</h2><p class="doux" style="margin:6px 0 0">La partie démarre dès qu'un deuxième joueur s'assoit à ${esc(this.canal.casino)}.</p>`;
+      return;
+    }
     if (e.statut === 'pause') {
       c.innerHTML = `<h2>Partie en pause</h2><p class="doux">${hote ? 'Reprends quand tout le monde est prêt.' : "En attente de l'hôte…"}</p>
         ${hote ? '<button class="btn btn-or" data-reprendre>Reprendre la partie</button>' : ''}`;
@@ -489,7 +496,7 @@ export class EcranTable {
   private async quitter() {
     const e = this.etat;
     const enJeu = e && e.monSiege !== null && e.statut === 'en_jeu';
-    if (enJeu && !(await confirmer('Quitter la table ?', 'Quitter', 'Rester'))) return;
+    if (enJeu && !(await confirmer(this.canal.casino ? 'Quitter la table ? Tes jetons retournent dans ton portefeuille.' : 'Quitter la table ?', 'Quitter', 'Rester'))) return;
     this.sortir();
   }
 
@@ -505,7 +512,7 @@ export class EcranTable {
     const hote = e.hote === e.moi;
     const p = panneau(`<h2>Menu</h2>
       <div style="display:flex;flex-direction:column;gap:10px">
-        ${hote ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
+        ${hote && !this.canal.casino ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
         <button class="btn" data-m="historique">Historique des mains</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
         ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}

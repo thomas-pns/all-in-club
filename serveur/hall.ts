@@ -13,6 +13,8 @@ type SalleJeu = Salle | SalleBJ | SalleRoulette;
 export type Jeu = 'poker' | 'blackjack' | 'roulette';
 const jeuDe = (s: SalleJeu): Jeu => (s instanceof SalleBJ ? 'blackjack' : s instanceof SalleRoulette ? 'roulette' : 'poker');
 import { DefinitionSucces } from '../moteur/succes.js';
+import { Ville, ville as trouverVille, caveDe, reglagesCasino, COMMANDES_HOTE_CASINO } from '../moteur/casino.js';
+import type { Portefeuilles } from './portefeuille.js';
 import { Utilisateur } from './comptes.js';
 import { Donnees, idUtilisateur } from './donnees.js';
 import { Notifications } from './notifications.js';
@@ -22,6 +24,7 @@ import { Notifications } from './notifications.js';
 export type MessageClient =
   | { type: 'auth'; jeton: string }
   | { type: 'hall' }                                  // s'abonner à la liste des tables
+  | { type: 'casino'; jeu: Jeu; ville: string }
   | { type: 'creer'; jeu?: Jeu; reglages: Partial<ReglagesSalle> | Partial<ReglagesBJ> | Partial<ReglagesRoulette> }
   | { type: 'rejoindre'; id?: string; code?: string }
   | { type: 'regarder'; id: string }
@@ -34,8 +37,8 @@ export type ResumeTable = ReturnType<Salle['resume']> | ReturnType<SalleBJ['resu
 
 export type MessageServeur =
   | { type: 'bienvenue'; utilisateur: Utilisateur; salle: string | null }
-  | { type: 'hall'; tables: ResumeTable[]; enLigne: number }
-  | { type: 'entre'; id: string; code: string; jeu: Jeu }
+  | { type: 'hall'; tables: ResumeTable[]; enLigne: number; villes: Record<string, number> }
+  | { type: 'entre'; id: string; code: string; jeu: Jeu; casino?: string }
   | { type: 'sorti'; raison?: string }
   | { type: 'salle'; msg: MessageSalle | MessageBJ | MessageRoulette }
   | { type: 'remplace' }
@@ -57,9 +60,11 @@ export class Hall {
   private hallEnAttente: ReturnType<typeof setTimeout> | null = null;
 
   private sauvegardes = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Tables du Casino : on y joue ses Clubs ♣. */
+  private casino = new Map<string, { jeu: Jeu; ville: Ville }>();
   private menage: ReturnType<typeof setInterval>;
 
-  constructor(private donnees: Donnees | null = null, private notifications: Notifications | null = null) {
+  constructor(private donnees: Donnees | null = null, private notifications: Notifications | null = null, private porte: Portefeuilles | null = null) {
     // Tables restées sans personne pendant 6 heures : supprimées
     this.menage = setInterval(() => {
       for (const s of this.salles.values()) if (s.nbConnectes === 0 && Date.now() - s.derniereActivite > 6 * 3_600_000) this.supprimer(s);
@@ -87,6 +92,11 @@ export class Hall {
         console.error('Table impossible à restaurer', sv.id, e);
         this.donnees.supprimerSalle(sv.id);
       }
+    }
+    for (const r of this.donnees.casinoTables()) {
+      const v = trouverVille(r.ville);
+      if (this.salles.has(r.id) && v) this.casino.set(r.id, { jeu: r.jeu as Jeu, ville: v });
+      else this.donnees.retirerCasino(r.id);
     }
   }
 
@@ -223,7 +233,7 @@ export class Hall {
       this.parMembre.set(id, c);
       const s = this.salleDe(id);
       this.envoyer(c, { type: 'bienvenue', utilisateur: u, salle: s?.id ?? null });
-      if (s) { this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: jeuDe(s) }); s.connexion(id, true); }
+      if (s) { this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: jeuDe(s), casino: this.nomCasino(s) }); s.connexion(id, true); this.demarrerCasino(s); }
       this.signalerHall();
       return;
     }
@@ -238,6 +248,9 @@ export class Hall {
       case 'hall':
         c.abonneHall = true;
         this.envoyer(c, this.messageHall(id));
+        return;
+      case 'casino':
+        this.entrerCasino(c, u, msg.jeu, String(msg.ville));
         return;
       case 'creer': {
         this.quitterSalle(id);
@@ -269,8 +282,14 @@ export class Hall {
           return this.envoyer(c, { type: 'erreur', texte: 'Table privée : il faut son code' });
         if (this.ouEst.get(id) !== s.id) this.quitterSalle(id);
         this.ouEst.set(id, s.id);
-        this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: jeuDe(s) });
-        if (msg.type === 'regarder') s.regarder(membre(u)); else s.rejoindre(membre(u));
+        this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: jeuDe(s), casino: this.nomCasino(s) });
+        const dejaAssis = s.estMembre(id) && this.estAssis(s, id);
+        if (msg.type === 'regarder' || (this.casino.has(s.id) && !dejaAssis && (this.porte?.etat(u.id).solde ?? 0) < caveDe(this.casino.get(s.id)!.ville, this.casino.get(s.id)!.jeu))) s.regarder(membre(u));
+        else {
+          s.rejoindre(membre(u));
+          if (this.casino.has(s.id) && !dejaAssis && this.estAssis(s, id) && !this.payerCave(s, id)) { s.partir(id); s.regarder(membre(u)); }
+          this.demarrerCasino(s);
+        }
         this.signalerHall();
         return;
       }
@@ -282,6 +301,7 @@ export class Hall {
       case 'cmd': {
         const s = this.salleDe(id);
         if (!s) return this.envoyer(c, { type: 'erreur', texte: "Tu n'es à aucune table" });
+        if (this.commandeCasino(c, s, id, msg.cmd as { c: string })) { this.planifierSauvegarde(s); this.signalerHall(); return; }
         if (s instanceof SalleBJ) s.commande(id, msg.cmd as CommandeBJ);
         else if (s instanceof SalleRoulette) s.commande(id, msg.cmd as CommandeRoulette);
         else s.commande(id, msg.cmd as CommandeClient);
@@ -297,6 +317,117 @@ export class Hall {
     if (c) c.utilisateur = u;
   }
 
+  /* --------------------------- Casino --------------------------- */
+
+  private nomCasino(s: SalleJeu) { const c = this.casino.get(s.id); return c ? c.ville.nom : undefined; }
+  private uid(id: string) { return idUtilisateur(id); }
+
+  /** Jetons d'un joueur assis à une table (ceux qui retournent au portefeuille s'il se lève). */
+  private jetonsDe(s: SalleJeu, id: string): number {
+    const v = s.vue(id) as unknown as { phase?: string; sieges: ({ id: string; tapis: number; totalMise?: number } | null)[] };
+    const siege = v.sieges.find((x) => x && x.id === id);
+    if (!siege) return 0;
+    return siege.tapis + (s instanceof SalleRoulette && v.phase === 'mises' ? siege.totalMise ?? 0 : 0);
+  }
+  private estAssis(s: SalleJeu, id: string) { return (s.vue(id) as unknown as { monSiege: number | null }).monSiege !== null; }
+
+  /** Rend au portefeuille les jetons d'un joueur qui quitte une table du Casino. */
+  private encaisser(s: SalleJeu, id: string) {
+    const c = this.casino.get(s.id), u = this.uid(id);
+    if (!c || u === null || !this.porte) return;
+    const n = this.jetonsDe(s, id);
+    if (n > 0) this.porte.crediter(u, n, `Retour de ${c.ville.nom}`);
+  }
+
+  /** Prélève la cave pour s'asseoir ; faux si le portefeuille ne suffit pas. */
+  private payerCave(s: SalleJeu, id: string): boolean {
+    const c = this.casino.get(s.id), u = this.uid(id);
+    if (!c || u === null || !this.porte) return false;
+    const cave = caveDe(c.ville, c.jeu);
+    if (this.porte.etat(u).solde < cave) return false;
+    this.porte.crediter(u, -cave, `Cave ${c.ville.nom}`);
+    return true;
+  }
+
+  /** Lance (ou relance) une table du Casino : personne n'en est le patron. */
+  private demarrerCasino(s: SalleJeu) {
+    if (!this.casino.has(s.id)) return;
+    const humains = s.resume().humains;
+    const poker = s instanceof Salle;
+    const cmd = (c: string) => (s as unknown as { commande(id: string, c: { c: string }): void }).commande(s.hote, { c });
+    if (s.statut === 'attente' && (!poker || humains >= 2)) cmd('lancer');
+    else if (s.statut === 'pause' && (!poker || humains >= 2)) cmd('reprendre');
+  }
+
+  /** Va s'asseoir à une table de la ville (en en créant une si besoin). */
+  private entrerCasino(c: Client, u: Utilisateur, jeu: Jeu, idVille: string) {
+    const v = trouverVille(idVille);
+    if (!v || !['poker', 'blackjack', 'roulette'].includes(jeu)) return this.envoyer(c, { type: 'erreur', texte: 'Ville inconnue' });
+    const id = memId(u);
+    if (!this.porte) return this.envoyer(c, { type: 'erreur', texte: 'Le Casino est fermé' });
+    const cave = caveDe(v, jeu);
+    if (this.porte.etat(u.id).solde < cave) return this.envoyer(c, { type: 'erreur', texte: `Il te faut ${cave.toLocaleString('fr-FR')} ♣ pour t'asseoir à ${v.nom}` });
+    this.quitterSalle(id);
+    let s = [...this.casino.entries()].map(([sid, x]) => ({ t: this.salles.get(sid), x }))
+      .find(({ t, x }) => t && x.jeu === jeu && x.ville.id === v.id && t.statut !== 'terminee' && t.resume().joueurs < t.reglages.places)?.t;
+    if (!s) {
+      const salleId = randomBytes(6).toString('base64url');
+      let code = genererCode();
+      while (this.parCode.has(code)) code = genererCode();
+      const r = reglagesCasino(v, jeu);
+      const nouvelle: SalleJeu = jeu === 'blackjack'
+        ? new SalleBJ({ id: salleId, code, hote: membre(u), reglages: { ...REGLAGES_BJ_DEFAUT, ...r } as ReglagesBJ, sortie: this.sortieCasino() })
+        : jeu === 'roulette'
+        ? new SalleRoulette({ id: salleId, code, hote: membre(u), reglages: { ...REGLAGES_ROULETTE_DEFAUT, ...r } as ReglagesRoulette, sortie: this.sortieCasino() })
+        : new Salle({ id: salleId, code, hote: membre(u), reglages: { ...REGLAGES_DEFAUT, ...r } as ReglagesSalle, sortie: this.sortie(() => nouvelle as Salle) });
+      s = nouvelle;
+      this.salles.set(salleId, s);
+      this.parCode.set(code, s);
+      this.casino.set(salleId, { jeu, ville: v });
+      this.donnees?.ajouterCasino(salleId, jeu, v.id);
+    } else s.rejoindre(membre(u));
+    this.ouEst.set(id, s.id);
+    if (!this.payerCave(s, id)) { this.ouEst.delete(id); s.partir(id); return this.envoyer(c, { type: 'erreur', texte: 'Portefeuille insuffisant' }); }
+    this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: jeuDe(s), casino: v.nom });
+    this.demarrerCasino(s);
+    s.diffuser();
+    this.planifierSauvegarde(s);
+    this.signalerHall();
+  }
+
+  /** Commandes envoyées à une table du Casino : l'argent passe par le portefeuille. Vrai si déjà traitée. */
+  private commandeCasino(c: Client, s: SalleJeu, id: string, cmd: { c: string }): boolean {
+    const x = this.casino.get(s.id);
+    if (!x) return false;
+    if (COMMANDES_HOTE_CASINO.includes(cmd.c)) { this.envoyer(c, { type: 'salle', msg: { type: 'erreur', texte: 'Les tables du Casino n\'ont pas de patron' } }); return true; }
+    const u = this.uid(id);
+    if (u === null || !this.porte) return true;
+    const commande = (k: { c: string }) => (s as unknown as { commande(id: string, c: { c: string }): void }).commande(id, k);
+    const cave = caveDe(x.ville, x.jeu);
+    if (cmd.c === 'asseoir') {
+      if (this.porte.etat(u).solde < cave) { this.envoyer(c, { type: 'salle', msg: { type: 'erreur', texte: 'Pas assez de Clubs pour la cave' } }); return true; }
+      commande(cmd);
+      if (this.estAssis(s, id) && !this.payerCave(s, id)) s.partir(id);
+      this.demarrerCasino(s);
+      return true;
+    }
+    if (cmd.c === 'lever') {
+      const avant = this.jetonsDe(s, id);
+      commande(cmd);
+      if (!this.estAssis(s, id) && avant > 0) this.porte.crediter(u, avant, `Retour de ${x.ville.nom}`);
+      return true;
+    }
+    if (cmd.c === 'recave') {
+      const avant = this.jetonsDe(s, id);
+      if (!this.payerCave(s, id)) { this.envoyer(c, { type: 'salle', msg: { type: 'erreur', texte: 'Pas assez de Clubs pour te recaver' } }); return true; }
+      commande(cmd);
+      if (this.jetonsDe(s, id) <= avant) this.porte.crediter(u, cave, 'Recave annulée');
+      this.demarrerCasino(s);
+      return true;
+    }
+    return false;
+  }
+
   private salleDe(id: string): SalleJeu | undefined {
     const sid = this.ouEst.get(id);
     return sid ? this.salles.get(sid) : undefined;
@@ -305,10 +436,18 @@ export class Hall {
   private quitterSalle(id: string) {
     const s = this.salleDe(id);
     this.ouEst.delete(id);
+    if (s) this.encaisser(s, id);
     s?.partir(id);
   }
 
   private supprimer(s: SalleJeu) {
+    if (this.casino.has(s.id)) {
+      // Fermeture d'une table du Casino : chacun récupère ses jetons
+      const v = s.vue('') as unknown as { sieges: ({ id: string } | null)[] };
+      for (const x of v.sieges) if (x) this.encaisser(s, x.id);
+      this.casino.delete(s.id);
+      this.donnees?.retirerCasino(s.id);
+    }
     s.arreter();
     this.donnees?.supprimerSalle(s.id);
     const h = this.sauvegardes.get(s.id);
@@ -324,10 +463,12 @@ export class Hall {
   private messageHall(pour: string): MessageServeur {
     const mienne = this.ouEst.get(pour);
     const tables = [...this.salles.values()]
-      .filter((s) => s.reglages.visibilite === 'publique' || s.id === mienne)
+      .filter((s) => !this.casino.has(s.id) && (s.reglages.visibilite === 'publique' || s.id === mienne))
       .map((s) => s.resume())
       .sort((a, b) => Number(b.statut === 'attente') - Number(a.statut === 'attente') || b.humains - a.humains);
-    return { type: 'hall', tables, enLigne: this.parMembre.size };
+    const villes: Record<string, number> = {};
+    for (const [sid, x] of this.casino) { const t = this.salles.get(sid); if (t) villes[`${x.jeu}:${x.ville.id}`] = (villes[`${x.jeu}:${x.ville.id}`] ?? 0) + t.resume().humains; }
+    return { type: 'hall', tables, enLigne: this.parMembre.size, villes };
   }
 
   /** Envoie la liste à jour aux abonnés (au plus une fois par seconde). */

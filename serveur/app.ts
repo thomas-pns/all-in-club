@@ -52,7 +52,7 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   kiosque.demarrer();
   app.addHook('onClose', async () => kiosque.arreter());
   const notifications = new Notifications(o.db, o.urlPublique ?? 'mailto:admin@all-in-club.invalid');
-  const hall = new Hall(donnees, notifications);
+  const hall = new Hall(donnees, notifications, portefeuilles);
   hall.restaurer();
   const limiteAuth = limiteur(10, 5 * 60_000);
   const limiteMail = limiteur(3, 15 * 60_000);

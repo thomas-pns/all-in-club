@@ -31,8 +31,8 @@ export function validerRoulette(r: ReglagesRoulette): ReglagesRoulette {
   return {
     nom: String(r.nom ?? 'Roulette').trim().slice(0, 30) || 'Roulette',
     visibilite: r.visibilite === 'privee' ? 'privee' : 'publique',
-    tapisDepart: ent(r.tapisDepart, 100, 100_000, 1000),
-    miseMin: [1, 5, 10, 25].includes(Number(r.miseMin)) ? Number(r.miseMin) : 5,
+    tapisDepart: ent(r.tapisDepart, 100, 10_000_000, 1000),
+    miseMin: [1, 5, 10, 25, 100, 1_000, 10_000].includes(Number(r.miseMin)) ? Number(r.miseMin) : 5,
     places: ent(r.places, 1, 6, 6),
     recaves: r.recaves === 'illimitees' || r.recaves === 'interdites' ? r.recaves : ent(r.recaves, 1, 5, 2),
     tours: ent(r.tours, 0, 500, 20),

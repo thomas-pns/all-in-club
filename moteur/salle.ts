@@ -936,8 +936,8 @@ export function valider(r: ReglagesSalle): ReglagesSalle {
   const out: ReglagesSalle = {
     nom: String(r.nom ?? 'Table').trim().slice(0, 30) || 'Table',
     visibilite: r.visibilite === 'privee' ? 'privee' : 'publique',
-    tapisDepart: ent(r.tapisDepart, 100, 100_000, 1000),
-    pb: ent(r.pb, 1, 500, 10),
+    tapisDepart: ent(r.tapisDepart, 100, 10_000_000, 1000),
+    pb: ent(r.pb, 1, 50_000, 10),
     gb: 0,
     places: ent(r.places, 2, 6, 6),
     recaves: r.recaves === 'illimitees' || r.recaves === 'interdites' ? r.recaves : ent(r.recaves, 1, 5, 2),

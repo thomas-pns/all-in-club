@@ -18,6 +18,8 @@ export interface CanalRoulette {
   quitter(): void;
   brancher(f: (m: MessageRoulette) => void): () => void;
   enLigne: boolean;
+  /** Table du Casino : on y joue ses Clubs ♣ (nom de la ville). */
+  casino?: string;
 }
 
 const VALEURS_JETONS = [1, 5, 10, 25, 100, 500, 1000];
@@ -172,6 +174,7 @@ export class EcranRoulette {
     const r = e.reglages;
     $('[data-nom]', this.el).textContent = r.nom;
     const infos = [`Jeton min. ${fmt(r.miseMin)}`];
+    if (this.canal.casino) infos.unshift('♣ en Clubs');
     if (e.numeroTour) infos.push(r.tours ? `Tour ${e.numeroTour}/${r.tours}` : `Tour ${e.numeroTour}`);
     if (e.spectateurs.length) infos.push(`👁 ${e.spectateurs.length}`);
     $('[data-infos]', this.el).textContent = infos.join(' · ');
@@ -389,7 +392,7 @@ export class EcranRoulette {
 
   private async quitter() {
     const e = this.etat;
-    if (e && e.monSiege !== null && e.statut === 'en_jeu' && !(await confirmer('Quitter la table ?', 'Quitter', 'Rester'))) return;
+    if (e && e.monSiege !== null && e.statut === 'en_jeu' && !(await confirmer(this.canal.casino ? 'Quitter la table ? Tes jetons retournent dans ton portefeuille.' : 'Quitter la table ?', 'Quitter', 'Rester'))) return;
     this.sortir();
   }
 
@@ -402,7 +405,7 @@ export class EcranRoulette {
     const hote = e.hote === e.moi;
     const p = panneau(`<h2>Menu</h2>
       <div style="display:flex;flex-direction:column;gap:10px">
-        ${hote ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
+        ${hote && !this.canal.casino ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
         <button class="btn" data-m="regles">Comment jouer ?</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
         ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}
