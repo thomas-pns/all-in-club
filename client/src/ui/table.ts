@@ -513,6 +513,7 @@ export class EcranTable {
         ${hote ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
         <button class="btn" data-m="historique">Historique des mains</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
+        ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}
         ${moi && !moi.absent && e.statut === 'en_jeu' ? '<button class="btn" data-m="absent">M\'absenter</button>' : ''}
         ${moi?.absent ? '<button class="btn" data-m="retour">Je reviens</button>' : ''}
         ${moi && e.statut !== 'en_jeu' ? '<button class="btn" data-m="lever">Me lever (regarder)</button>' : ''}
@@ -522,6 +523,7 @@ export class EcranTable {
       p.fermer();
       switch (b.dataset.m) {
         case 'hote': return this.panneauHote();
+        case 'code': return this.copierCode();
         case 'reglages': return ouvrirReglagesPerso((oui) => this.canal.envoyer({ c: 'toujoursMontrer', oui }));
         case 'historique': return ouvrirHistorique({
           moi: e.moi,

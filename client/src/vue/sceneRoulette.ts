@@ -18,11 +18,15 @@ const T = 0x2a1e3f, OR = 0xffc23d, CREME = 0xfff4df;
 const POLICE = 'Fredoka, Nunito, sans-serif';
 export const COULEURS_SIEGES = [0xff6b5b, 0x46c2f0, 0xffc23d, 0x8e5bd6, 0x43b072, 0xff6b9a];
 const PAS = (Math.PI * 2) / 37;
+/** Rayon auquel la roue est dessinée ; elle est ensuite mise à l'échelle. */
+const R0 = 400;
 const ROUGE_C = '#E5484D', NOIR_C = '#2A1E3F', VERT_C = '#25A05C';
 
 interface Geo {
   W: number; H: number;
   roue: { x: number; y: number; r: number };
+  /** Téléphone : la roue en grand pendant le tirage (le tapis s'efface). */
+  roueGrande?: { x: number; y: number; r: number };
   croupier: { x: number; y: number; taille: number };
   tapis: { vertical: boolean; x0: number; y0: number; cw: number; ch: number };
   histo: { x: number; y: number; w: number; h: number };
@@ -30,9 +34,9 @@ interface Geo {
 }
 
 const geometrie = (portrait: boolean): Geo => portrait
-  ? { W: 900, H: 1410, roue: { x: 450, y: 166, r: 152 }, croupier: { x: 82, y: 78, taille: 100 },
-      tapis: { vertical: true, x0: 875, y0: 420, cw: 170, ch: 58 }, histo: { x: 25, y: 326, w: 850, h: 40 },
-      ySieges: 1322, xSieges: [80, 820], avatar: 80 }
+  ? { W: 900, H: 1430, roue: { x: 800, y: 96, r: 84 }, roueGrande: { x: 450, y: 640, r: 405 }, croupier: { x: 62, y: 74, taille: 92 },
+      tapis: { vertical: true, x0: 875, y0: 198, cw: 170, ch: 72 }, histo: { x: 122, y: 54, w: 580, h: 42 },
+      ySieges: 1328, xSieges: [80, 820], avatar: 80 }
   : { W: 1600, H: 900, roue: { x: 330, y: 452, r: 262 }, croupier: { x: 96, y: 96, taille: 108 },
       tapis: { vertical: false, x0: 655, y0: 196, cw: 64, ch: 76 }, histo: { x: 655, y: 86, w: 896, h: 44 },
       ySieges: 752, xSieges: [700, 1510], avatar: 92 };
@@ -187,6 +191,10 @@ export class SceneRoulette {
   private coucheJetons = new Container();
   private couchePlaces = new Container();
   private coucheEffets = new Container();
+  /** La roue (rayon de dessin R0, mise à l'échelle) et le tapis, déplaçables ensemble sur téléphone. */
+  private roueC = new Container();
+  private tapisC = new Container();
+  private vue: 'tapis' | 'roue' = 'tapis';
   private roueFixe = new Sprite();
   private roueTournante = new Sprite();
   private bille = new Graphics();
@@ -208,6 +216,7 @@ export class SceneRoulette {
   private survol: string | null = null;
   private fin: { siege: number; fin: number; total: number } | null = null;
   onMise: ((id: string) => void) | null = null;
+  onVue: ((v: 'tapis' | 'roue') => void) | null = null;
   onClicPlace: ((siege: number) => void) | null = null;
 
   static async creer(el: HTMLElement, opts: { vitesse: number }) {
@@ -218,9 +227,14 @@ export class SceneRoulette {
     s.anim = new Animateur(s.app.ticker);
     s.anim.vitesse = opts.vitesse;
     s.roueFixe.anchor.set(0.5); s.roueTournante.anchor.set(0.5); s.croupier.anchor.set(0.5);
-    s.racine.addChild(s.fond, s.roueFixe, s.roueTournante, s.bille, s.coucheTapis, s.historique, s.croupier, s.bulleCroupier, s.couchePlaces, s.coucheJetons, s.grandNumero, s.coucheEffets);
+    s.tapisC.addChild(s.fond, s.coucheTapis, s.coucheJetons);
+    s.roueC.addChild(s.roueFixe, s.roueTournante, s.bille, s.grandNumero);
+    s.racine.addChild(s.tapisC, s.roueC, s.historique, s.croupier, s.bulleCroupier, s.couchePlaces, s.coucheEffets);
     s.coucheTapis.addChild(s.surbrillance, s.marqueur);
     s.app.stage.addChild(s.racine);
+    // Sur téléphone, toucher la roue l'agrandit (ou la réduit)
+    s.roueC.eventMode = 'static';
+    s.roueC.on('pointertap', () => { if (s.portrait) s.afficherVue(s.vue === 'roue' ? 'tapis' : 'roue'); });
     s.bille.circle(0, 0, 9).fill(0xffffff).stroke({ width: 2.5, color: T });
     s.bille.circle(-2.5, -2.5, 3).fill({ color: 0xffffff, alpha: 1 });
     s.app.ticker.add(() => s.image());
@@ -256,10 +270,9 @@ export class SceneRoulette {
     this.racine.position.set((w - g.W * e) / 2, (h - g.H * e) / 2);
     this.croupier.position.set(g.croupier.x, g.croupier.y);
     this.croupier.width = this.croupier.height = g.croupier.taille;
-    this.bulleCroupier.position.set(g.croupier.x + g.croupier.taille * 0.55, g.croupier.y - g.croupier.taille * 0.3);
-    this.roueFixe.position.set(g.roue.x, g.roue.y);
-    this.roueTournante.position.set(g.roue.x, g.roue.y);
-    this.grandNumero.position.set(g.roue.x, g.roue.y);
+    if (this.portrait) this.bulleCroupier.position.set(g.croupier.x - g.croupier.taille * 0.42, g.croupier.y + g.croupier.taille * 0.66);
+    else this.bulleCroupier.position.set(g.croupier.x + g.croupier.taille * 0.55, g.croupier.y - g.croupier.taille * 0.3);
+    this.placerVue(false);
   }
 
   private installerTapis() {
@@ -351,9 +364,6 @@ export class SceneRoulette {
       const nom: Record<string, string> = { c1: '2 à 1', c2: '2 à 1', c3: '2 à 1', d1: '1re douzaine', d2: '2e douzaine', d3: '3e douzaine', manque: '1 - 18', pair: 'PAIR', impair: 'IMPAIR', passe: '19 - 36' };
       texte(nom[id], cx, cy, id.startsWith('c') ? t * 0.85 : t, '#FFF4DF', tourne && !id.startsWith('c'));
     }
-    // Pastille de l'historique
-    const h = g.histo;
-    x.fillStyle = 'rgba(0,0,0,.22)'; x.beginPath(); x.roundRect(h.x, h.y, h.w, h.h, h.h / 2); x.fill();
     const ancienne = this.fond.texture;
     this.fond.texture = textureCanvas(c, res);
     if (ancienne && ancienne !== Texture.EMPTY) ancienne.destroy(true);
@@ -362,7 +372,7 @@ export class SceneRoulette {
 
   /** Le cylindre : la partie fixe (bois, piste de la bille) et la partie qui tourne (cases, cône, croisillon). */
   private dessinerRoue() {
-    const R = this.geo.roue.r, res = 2; // résolution entière : sinon CanvasSource redimensionne (et efface) la toile
+    const R = R0, res = 1.5; // R·2·res entier : sinon CanvasSource redimensionne (et efface) la toile
     const toile = () => { const c = document.createElement('canvas'); c.width = c.height = R * 2 * res; const x = c.getContext('2d')!; x.scale(res, res); x.translate(R, R); return { c, x }; };
     {
       const { c, x } = toile();
@@ -418,6 +428,38 @@ export class SceneRoulette {
       x.beginPath(); x.arc(0, 0, 18, 0, Math.PI * 2); x.fillStyle = '#FFD25E'; x.fill(); x.lineWidth = 3; x.strokeStyle = '#2A1E3F'; x.stroke();
       this.roueTournante.texture = textureCanvas(c, res);
     }
+  }
+
+  /* ------------------------------ Vue tapis / vue roue (téléphone) ------------------------------ */
+
+  get enPortrait() { return this.portrait; }
+  get vueActuelle() { return this.vue; }
+
+  /** Sur téléphone : le tapis (avec une mini-roue) ou la roue en grand. Sans effet sur grand écran. */
+  afficherVue(v: 'tapis' | 'roue', anime = true) {
+    if (v === this.vue) return;
+    this.vue = v;
+    this.placerVue(anime);
+    this.onVue?.(v);
+  }
+
+  private placerVue(anime: boolean) {
+    const g = this.geo;
+    const grande = this.portrait && this.vue === 'roue' && g.roueGrande;
+    const cible = grande ? g.roueGrande! : g.roue;
+    const pos = { x: cible.x, y: cible.y }, ech = cible.r / R0;
+    const tapisAlpha = grande ? 0 : 1;
+    this.tapisC.eventMode = grande ? 'none' : 'auto';
+    this.roueC.cursor = this.portrait ? 'pointer' : 'default';
+    if (!anime) {
+      this.roueC.position.set(pos.x, pos.y); this.roueC.scale.set(ech);
+      this.tapisC.alpha = tapisAlpha; this.tapisC.y = grande ? 60 : 0; this.tapisC.visible = tapisAlpha > 0;
+      return;
+    }
+    this.tapisC.visible = true;
+    void this.anim.tween(this.roueC.position, pos, 480, { ease: EASE.entreeSortie });
+    void this.anim.tween(this.roueC.scale, { x: ech, y: ech }, 480, { ease: EASE.entreeSortie });
+    void this.anim.tween(this.tapisC, { alpha: tapisAlpha, y: grande ? 60 : 0 }, 380, { ease: EASE.entreeSortie }).then(() => { this.tapisC.visible = this.tapisC.alpha > 0; });
   }
 
   /* ------------------------------ Places ------------------------------ */
@@ -498,7 +540,7 @@ export class SceneRoulette {
     for (const [k, j] of this.jetons) if (!vus.has(k)) { j.destroy({ children: true }); this.jetons.delete(k); }
     // Bille au repos dans la dernière case sortie
     const n = e.numero ?? e.historique[0] ?? null;
-    if (n !== null) this.billeRel = { phi: this.anglePoche(n), rayon: this.geo.roue.r * 0.6 };
+    if (n !== null) this.billeRel = { phi: this.anglePoche(n), rayon: R0 * 0.6 };
     else this.billeRel = null;
     this.majMarqueur(e.phase !== 'mises' ? e.numero : null);
     this.majHistorique(e.historique);
@@ -553,6 +595,7 @@ export class SceneRoulette {
   private majHistorique(l: number[]) {
     const h = this.geo.histo;
     this.historique.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this.historique.addChild(new Graphics().roundRect(h.x, h.y, h.w, h.h, h.h / 2).fill({ color: 0, alpha: 0.25 }));
     const taille = h.h - 10, ecart = taille + 7;
     const max = Math.floor((h.w - 20) / ecart);
     l.slice(0, max).forEach((n, i) => {
@@ -577,7 +620,8 @@ export class SceneRoulette {
     if (this.billeRel) {
       this.bille.visible = true;
       const a = this.roueTournante.rotation + this.billeRel.phi;
-      this.bille.position.set(g.roue.x + Math.cos(a) * this.billeRel.rayon, g.roue.y + Math.sin(a) * this.billeRel.rayon);
+      this.bille.position.set(Math.cos(a) * this.billeRel.rayon, Math.sin(a) * this.billeRel.rayon);
+      this.bille.scale.set(Math.max(1, 0.55 / this.roueC.scale.x) * 1.6);
     } else this.bille.visible = false;
     for (const p of this.places.values()) {
       if (p.vide || !p.avatar.texture?.width) continue;
@@ -638,7 +682,7 @@ export class SceneRoulette {
 
   /** La bille est lancée et finit dans la case du numéro. */
   private async lancerBille(n: number) {
-    const R = this.geo.roue.r;
+    const R = R0;
     const depart = this.billeRel ?? { phi: -Math.PI / 2 - this.roueTournante.rotation, rayon: R * 0.6 };
     // Lancée sur la piste, en sens inverse de la roue
     const cible = this.anglePoche(n);
@@ -696,6 +740,7 @@ export class SceneRoulette {
         }
         case 'rienNeVaPlus':
           this.activer(false);
+          this.afficherVue('roue');
           this.parler('Rien ne va plus !', OR);
           await this.anim.attendre(500);
           break;
@@ -705,7 +750,8 @@ export class SceneRoulette {
           this.afficherGrandNumero(ev.numero);
           this.parler(annonce(ev.numero), ev.numero === 0 ? 0x5bd08a : couleurNumero(ev.numero) === 'rouge' ? 0xff8a7e : CREME);
           jouerSon('retourne');
-          await this.anim.attendre(700);
+          await this.anim.attendre(this.portrait ? 1500 : 700);
+          if (this.portrait) { this.afficherVue('tapis'); await this.anim.attendre(520); }
           break;
         }
         case 'perte': {
@@ -714,7 +760,7 @@ export class SceneRoulette {
           if (j) {
             this.jetons.delete(k);
             const g = this.geo;
-            pertes.push(this.anim.tween(j, { x: g.roue.x, y: g.roue.y, alpha: 0 }, 520, { ease: EASE.entree, delai: pertes.length * 25 }).then(() => j.destroy({ children: true })));
+            pertes.push(this.anim.tween(j, { x: this.roueC.x, y: this.roueC.y, alpha: 0 }, 520, { ease: EASE.entree, delai: pertes.length * 25 }).then(() => j.destroy({ children: true })));
           }
           break;
         }
@@ -725,7 +771,7 @@ export class SceneRoulette {
             // La banque paie sur le tapis, puis tout revient au joueur
             const g = this.geo;
             jouerSon('jetons');
-            await Promise.all(gains.map((x, i) => x.t === 'gain' ? this.voler(x.siege, x.retour - x.montant, { x: g.roue.x, y: g.roue.y }, this.posJeton(x.siege, x.mise), 420, i * 60).then(() => this.jeton(x.siege, x.mise).maj(x.retour)) : Promise.resolve()));
+            await Promise.all(gains.map((x, i) => x.t === 'gain' ? this.voler(x.siege, x.retour - x.montant, { x: this.roueC.x, y: this.roueC.y }, this.posJeton(x.siege, x.mise), 420, i * 60).then(() => this.jeton(x.siege, x.mise).maj(x.retour)) : Promise.resolve()));
             const p = this.places.get(ev.siege);
             if (p) {
               await Promise.all(gains.filter((x) => x.t === 'gain' && x.siege === ev.siege).map((x, i) => {
@@ -755,7 +801,7 @@ export class SceneRoulette {
   private afficherGrandNumero(n: number) {
     const c = this.grandNumero;
     c.removeChildren().forEach((x) => x.destroy({ children: true }));
-    const r = this.geo.roue.r * 0.3;
+    const r = R0 * 0.3;
     const fond = n === 0 ? 0x25a05c : couleurNumero(n) === 'rouge' ? 0xe5484d : 0x2a1e3f;
     c.addChild(new Graphics().circle(0, 0, r).fill(fond).stroke({ width: 6, color: OR }));
     const t = new Text({ text: String(n), style: new TextStyle({ fontFamily: POLICE, fontWeight: '700', fontSize: r * 1.05, fill: 0xfff4df }) });

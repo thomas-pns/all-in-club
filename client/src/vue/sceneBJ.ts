@@ -20,7 +20,12 @@ interface GeoBJ {
   texte: number; kCercle: number; kAvatar: number; aplat: number;
 }
 
-const geometrie = (portrait: boolean): GeoBJ => portrait
+/** Sur téléphone, avec beaucoup de places, personnages et cartes rapetissent pour que tout tienne. */
+const geometrie = (portrait: boolean, places = 1): GeoBJ => {
+  const g = geometrieBase(portrait);
+  return portrait && places >= 4 ? { ...g, avatar: 100, carte: 96 } : g;
+};
+const geometrieBase = (portrait: boolean): GeoBJ => portrait
   ? { W: 900, H: 1300, cx: 450, haut: 170, rx: 425, ry: 880, carte: 118, avatar: 128, croupier: { x: 450, y: 84 }, cartesCroupier: { x: 450, y: 300 }, sabot: { x: 795, y: 240 }, defausse: { x: 105, y: 240 }, plateau: { x: 450, y: 230 }, texte: 525, kCercle: 0.8, kAvatar: 0.985, aplat: 0.93 }
   : { W: 1600, H: 900, cx: 800, haut: 90, rx: 690, ry: 640, carte: 92, avatar: 104, croupier: { x: 800, y: 74 }, cartesCroupier: { x: 800, y: 215 }, sabot: { x: 1405, y: 168 }, defausse: { x: 195, y: 168 }, plateau: { x: 800, y: 175 }, texte: 345, kCercle: 0.8, kAvatar: 1.04, aplat: 1 };
 
@@ -172,7 +177,7 @@ export class SceneBJ {
   private positionPlace(siege: number, n: number) {
     const g = this.geo;
     // Le siège 0 est à droite du point de vue des joueurs (première place servie)
-    const debut = this.portrait ? 40 : 34, fin = this.portrait ? 140 : 146;
+    const debut = this.portrait ? (n >= 4 ? 27 : 40) : 34, fin = this.portrait ? (n >= 4 ? 153 : 140) : 146;
     const a = (n === 1 ? 90 : debut + ((fin - debut) * siege) / (n - 1)) * (Math.PI / 180);
     const p = (k: number) => ({ x: g.cx + g.rx * k * Math.cos(a), y: g.haut + g.ry * k * Math.sin(a) * g.aplat });
     return { cercle: p(g.kCercle), avatarPos: p(g.kAvatar) };
@@ -216,6 +221,16 @@ export class SceneBJ {
     const echelle = nMains > 2 ? 0.72 : nMains > 1 ? 0.85 : 1;
     const ecart = nMains > 1 ? g.carte * 0.95 * echelle : 0;
     const x0 = p.cercle.x + (m - (nMains - 1) / 2) * ecart;
+    // Téléphone : les places du haut des côtés posent leurs cartes vers le centre (sinon elles montent sur le sabot)
+    const cote = p.cercle.x - g.cx;
+    if (this.portrait && Math.abs(cote) > g.rx * 0.55) {
+      const dir = -Math.sign(cote);
+      return {
+        x: x0 + dir * g.carte * 0.95 + k * g.carte * 0.3 * echelle,
+        y: p.cercle.y - g.carte * 0.38 - k * g.carte * 0.2 * echelle,
+        w: g.carte * echelle,
+      };
+    }
     return {
       x: x0 + k * g.carte * 0.3 * echelle - g.carte * 0.15,
       y: p.cercle.y - g.carte * (this.portrait ? 1.02 : 1.12) - k * g.carte * 0.2 * echelle,
@@ -237,7 +252,7 @@ export class SceneBJ {
 
   appliquerEtat(e: VueBJ, force = false) {
     const cle = `${this.portrait}|${e.reglages.places}`;
-    if (force || cle !== this.cleDisposition) { this.cleDisposition = cle; this.coucheTable.removeChildren(); this.coucheTable.addChild(this.croupier, this.badgeCroupier, this.bulleCroupier); this.construirePlaces(e); }
+    if (force || cle !== this.cleDisposition) { this.cleDisposition = cle; this.geo = geometrie(this.portrait, e.reglages.places); this.coucheTable.removeChildren(); this.coucheTable.addChild(this.croupier, this.badgeCroupier, this.bulleCroupier); this.construirePlaces(e); }
     this.etat = e;
     const g = this.geo;
     for (const [i, p] of this.places) {
@@ -304,14 +319,20 @@ export class SceneBJ {
   private majPlace(p: PlaceVue, s: VueSiegeBJ | null, e: VueBJ) {
     p.vide = !s;
     const g = this.geo;
+    const plaque = p.cont.children[2] as Graphics;
     if (!s) {
+      // Place libre : discrète, et visible seulement pour qui peut s'y asseoir
       p.avatar.visible = false;
-      p.anneau.clear().circle(0, 0, g.avatar * 0.4).fill({ color: 0, alpha: 0.18 }).stroke({ width: 4, color: CREME, alpha: 0.4 });
-      p.nom.text = e.monSiege === null && e.statut !== 'terminee' ? 'S\'asseoir' : 'Libre';
-      p.nom.alpha = 0.6; p.tapis.text = '';
-      p.cont.cursor = e.monSiege === null ? 'pointer' : 'default';
+      plaque.visible = false;
+      const peut = e.monSiege === null && e.statut !== 'terminee';
+      p.cont.visible = peut;
+      p.anneau.clear().circle(0, 0, g.avatar * 0.32).fill({ color: 0, alpha: 0.2 }).stroke({ width: 4, color: CREME, alpha: 0.5 });
+      p.nom.text = "S'asseoir"; p.nom.alpha = 0.75; p.nom.style.fill = CREME; p.tapis.text = '';
+      p.cont.cursor = 'pointer';
       return;
     }
+    p.cont.visible = true;
+    plaque.visible = true;
     p.cont.cursor = 'default';
     p.avatar.visible = true;
     p.nom.alpha = 1;
@@ -324,7 +345,6 @@ export class SceneBJ {
       p.cle = cle;
       void textureAvatar(s.avatar, ex, s.deconnecte, s.cadre).then((t) => { if (p.cle === cle && !p.avatar.destroyed) { p.avatar.texture = t; p.avatar.width = p.avatar.height = g.avatar; } });
     }
-    const plaque = p.cont.children[2] as Graphics;
     const actif = e.aParler?.siege === s.siege || (e.phase === 'mises' && !s.pret && moi);
     const f = g.avatar / 104;
     plaque.clear().roundRect(-72 * f, g.avatar / 2 - 14 * f, 144 * f, 50 * f, 15).fill(actif ? 0xfff4df : moi ? 0x4a3a78 : 0x3a2d5e).stroke({ width: 4, color: actif ? OR : T });

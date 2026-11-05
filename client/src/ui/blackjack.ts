@@ -484,6 +484,7 @@ export class EcranBJ {
         ${hote ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
         <button class="btn" data-m="regles">Comment jouer ?</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
+        ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}
         ${moi && e.statut !== 'en_jeu' ? '<button class="btn" data-m="lever">Me lever (regarder)</button>' : ''}
         <button class="btn btn-corail" data-m="quitter">Quitter la table</button>
       </div>`);
@@ -492,6 +493,7 @@ export class EcranBJ {
       switch (b.dataset.m) {
         case 'hote': return this.panneauHote();
         case 'regles': return ouvrirReglesBJ();
+        case 'code': return this.copierCode();
         case 'reglages': return ouvrirReglagesPerso();
         case 'lever': return this.canal.envoyer({ c: 'lever' });
         case 'quitter': return void this.quitter();

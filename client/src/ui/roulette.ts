@@ -41,6 +41,9 @@ export class EcranRoulette {
   private tourPile = -1;
   private derniere: string | null = null;
   private cleBarre = '';
+  private cleVue = '';
+  /** Dernier état affiché dans la barre (peut précéder this.etat pendant une animation). */
+  private etatBarre: VueRoulette | null = null;
 
   constructor(racine: HTMLElement, private canal: CanalRoulette, private onQuitter: () => void) {
     this.el = html(`<div class="ecran-table ecran-roulette">
@@ -112,6 +115,7 @@ export class EcranRoulette {
     this.scene = await SceneRoulette.creer($('[data-scene]', this.el), { vitesse: p.rapide ? 2 : 1 });
     if (this.detruit) { this.scene.detruire(); return; }
     this.scene.onMise = (id) => this.poser(id);
+    this.scene.onVue = () => { this.cleBarre = ''; if (this.etatBarre) this.majBarre(this.etatBarre); };
     this.scene.onClicPlace = (s) => { if (this.etat?.monSiege === null) this.canal.envoyer({ c: 'asseoir', siege: s }); };
     if (this.etat) { this.scene.appliquerEtat(this.etat); this.majInterface(this.etat); }
     void this.traiter();
@@ -172,6 +176,12 @@ export class EcranRoulette {
     code.classList.toggle('cache', !this.canal.enLigne);
     const moi = e.monSiege !== null ? e.sieges[e.monSiege] : null;
     this.scene?.activer(e.statut === 'en_jeu' && e.phase === 'mises' && !!moi);
+    // Téléphone : le tapis pour miser, la roue en grand une fois prêt (on peut toujours basculer à la main)
+    const cleVue = `${e.numeroTour}|${e.phase}|${moi?.pret}`;
+    if (cleVue !== this.cleVue) {
+      this.cleVue = cleVue;
+      if (e.phase === 'mises') this.scene?.afficherVue(moi?.pret ? 'roue' : 'tapis');
+    }
     if (this.tourPile !== e.numeroTour) { this.tourPile = e.numeroTour; this.pile = []; this.derniere = null; }
     this.majCentre(e);
     this.majBarre(e);
@@ -229,9 +239,10 @@ export class EcranRoulette {
   }
 
   private majBarre(e: VueRoulette) {
+    this.etatBarre = e;
     const barre = $('[data-barre]', this.el);
     const moi = e.monSiege !== null ? e.sieges[e.monSiege] : null;
-    const cle = JSON.stringify([e.statut, e.phase, e.numeroTour, e.monSiege, moi?.pret, moi?.tapis, moi?.totalMise, moi?.retour, moi?.recavesRestantes, this.jeton, this.derniere, e.resteMs === null]);
+    const cle = JSON.stringify([this.scene?.enPortrait, this.scene?.vueActuelle, e.statut, e.phase, e.numeroTour, e.monSiege, moi?.pret, moi?.tapis, moi?.totalMise, moi?.retour, moi?.recavesRestantes, this.jeton, this.derniere, e.resteMs === null]);
     if (cle === this.cleBarre) return;
     this.cleBarre = cle;
 
@@ -268,7 +279,8 @@ export class EcranRoulette {
     const d = this.derniere ? MISES.get(this.derniere) : null;
     const aide = d ? `${esc(d.nom)} · paie ${d.gain} contre 1` : window.matchMedia('(pointer: fine)').matches ? 'Clique sur le tapis pour poser tes jetons' : 'Touche le tapis pour poser tes jetons';
     const precedentes = Object.values(moi.precedentes).reduce((s, x) => s + x, 0);
-    barre.innerHTML = `<div class="ligne-conseil"><span class="titre-barre aide-mise">${aide}</span><span class="compte" data-compte ${e.resteMs !== null ? `data-fin="${performance.now() + e.resteMs}"` : ''}></span></div>
+    const bascule = this.scene?.enPortrait ? `<button class="btn btn-petit btn-fantome" data-vue>${this.scene.vueActuelle === 'roue' ? '▦ Tapis' : '🎡 Roue'}</button>` : '';
+    barre.innerHTML = `<div class="ligne-conseil"><span class="titre-barre aide-mise">${this.scene?.vueActuelle === 'roue' && this.scene.enPortrait ? 'Touche la roue pour revenir au tapis' : aide}</span><span class="ligne">${bascule}<span class="compte" data-compte ${e.resteMs !== null ? `data-fin="${performance.now() + e.resteMs}"` : ''}></span></span></div>
       <div class="mises-bj">
         <div class="jetons-bj">${dispo.map((v) => `<button class="jeton-bj ${v === this.jeton ? 'choisi' : ''}" data-jeton="${v}" style="--c:${couleur}" ${v > moi.tapis ? 'disabled' : ''} title="Jeton de ${fmt(v)}"><span>${court(v)}</span></button>`).join('')}</div>
         <div class="montant-bj"><small>Misé</small><b>${fmt(moi.totalMise)}</b></div>
@@ -283,6 +295,7 @@ export class EcranRoulette {
         <button class="btn ${moi.pret ? 'btn-vert' : 'btn-or'}" data-r="pret" ${moi.pret ? 'disabled' : ''}><span class="col">${moi.pret ? '✓ Prêt' : moi.totalMise ? 'Prêt !' : 'Je passe'}<small>${moi.pret ? 'on attend les autres' : moi.totalMise ? 'lancer la bille' : 'ce tour-ci'}</small></span></button>
       </div>`;
     this.majCompteur();
+    const bv = $('[data-vue]', barre); if (bv) bv.onclick = () => this.scene?.afficherVue(this.scene.vueActuelle === 'roue' ? 'tapis' : 'roue');
     $$('[data-jeton]', barre).forEach((b) => b.onclick = () => { this.jeton = Number(b.dataset.jeton); jouerSon('clic'); $$('[data-jeton]', barre).forEach((x) => x.classList.toggle('choisi', x === b)); });
     const act = (k: string, f: () => void) => { const b = $(`[data-r="${k}"]`, barre); if (b) b.onclick = () => { debloquerSon(); f(); }; };
     act('annuler', () => { const x = this.pile.pop(); if (x) { this.canal.envoyer({ c: 'retirer', mise: x.mise, montant: x.montant }); jouerSon('clic'); } });
@@ -396,6 +409,7 @@ export class EcranRoulette {
         ${hote ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
         <button class="btn" data-m="regles">Comment jouer ?</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
+        ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}
         ${moi && e.phase !== 'tirage' ? '<button class="btn" data-m="lever">Me lever (regarder)</button>' : ''}
         <button class="btn btn-corail" data-m="quitter">Quitter la table</button>
       </div>`);
@@ -404,6 +418,7 @@ export class EcranRoulette {
       switch (b.dataset.m) {
         case 'hote': return this.panneauHote();
         case 'regles': return ouvrirReglesRoulette();
+        case 'code': return this.copierCode();
         case 'reglages': return ouvrirReglagesPerso();
         case 'lever': return this.canal.envoyer({ c: 'lever' });
         case 'quitter': return void this.quitter();

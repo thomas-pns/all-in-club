@@ -19,7 +19,9 @@ body {
 }
 input, select, textarea { -webkit-user-select: text; user-select: text; }
 h1, h2, h3, .titre { font-family: Fredoka, Nunito, sans-serif; margin: 0; font-weight: 600; }
-#app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+html { background-color: var(--nuit); }
+/* Pas de bloc « fixed » plein écran : sur iPhone (iOS 26/27), ça laissait une bande vide en bas */
+#app { position: relative; height: 100%; display: flex; flex-direction: column; }
 .ecran { flex: 1; overflow-y: auto; padding: calc(18px + var(--haut)) calc(16px + var(--droite)) calc(24px + var(--bas)) calc(16px + var(--gauche)); }
 .centre { max-width: 1060px; margin: 0 auto; }
 .etroit { max-width: 440px; margin: 0 auto; }
@@ -516,3 +518,6 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
   .tuile-jeu { flex-direction: column; align-items: flex-start; }
   .tuile-jeu small { display: none; }
 }
+
+/* Téléphone : le code de la table passe dans le menu (la barre du haut débordait) */
+@media (max-width: 600px) { .barre-haut .code { display: none; } }
