@@ -17,7 +17,7 @@ import { api, ErreurApi } from '../reseau';
 import { fmt } from '../art/rendu';
 import { avatarSVG } from '../art/avatars';
 import { jouerSon } from '../vue/son';
-import { $, $$, esc, html, toast, panneau, avatar } from './commun';
+import { $, $$, esc, html, toast, panneau, avatar, avecPieces, logoHTML } from './commun';
 import { vueVitrine, vueTicket, vueKeno, vueLoto, ContexteKiosque } from './kiosque';
 import type { TypeTicket } from '../../../moteur/kiosque';
 import { VILLES, Ville } from '../../../moteur/casino';
@@ -38,7 +38,7 @@ interface TourDeRoue { segment: number; clubs: number; tickets: number; jour: nu
 
 type Onglet = 'club' | 'kiosque' | 'classement';
 /** On revient là où on était en quittant une table. */
-let memoire: { onglet: Onglet; jeu: JeuCasino | null; vueK?: string | null } = { onglet: 'club', jeu: null };
+let memoire: { onglet: Onglet; jeu: JeuCasino | null; vueK?: string | null; salon?: JeuCasino | null } = { onglet: 'club', jeu: null };
 
 const NOMS: Record<JeuCasino, string> = { poker: 'Poker', blackjack: 'Black Jack', roulette: 'Roulette' };
 const ICONE_ROULETTE = '<svg width="28" height="28" viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="15" fill="none" stroke="#FF6B5B" stroke-width="7" stroke-dasharray="5 4"/><circle cx="23" cy="23" r="7" fill="#FFC23D"/></svg>';
@@ -49,7 +49,7 @@ const SVG_ONGLETS: Record<string, string> = {
   classement: '<path d="M6 20V10M12 20V4M18 20v-7"/>',
   profil: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 15-5 16 0"/>',
 };
-const clubs = (n: number) => `${fmt(n)} ♣`;
+const clubs = (n: number) => `${fmt(n)}&nbsp;<i class="pc"></i>`;
 const mult = (m: number) => `×${String(m).replace('.', ',')}`;
 
 export class EcranHall {
@@ -58,7 +58,6 @@ export class EcranHall {
   private enLigne = 0;
   private villes: Record<string, number> = {};
   private porte: EtatPortefeuille | null = null;
-  private rang: number | null = null;
   private arrets: (() => void)[] = [];
   private annonces: Annonce[] = [];
   private missions: { missions: EtatMission[]; nouvellesDans: number; recu: number } | null = null;
@@ -66,9 +65,9 @@ export class EcranHall {
   constructor(racine: HTMLElement, private u: Utilisateur, private a: ActionsHall) {
     this.el = html(`<div class="club">
       <header class="club-entete">
-        <button class="club-moi" data-profil aria-label="Mon profil">${avatarSVG(u.avatar, 'content', 46, { cadre: u.cadre })}
-          <span><b>${esc(u.pseudo)}</b><small data-rang>Membre du Club</small></span></button>
+        <button class="logo-club" data-accueil aria-label="All-In Club : retour à la rue">${logoHTML()}</button>
         <button class="porte-monnaie" data-porte aria-label="Mon portefeuille"><span class="piece">♣</span><b data-solde>…</b></button>
+        <button class="club-moi" data-profil aria-label="Mon profil (${esc(u.pseudo)})">${avatarSVG(u.avatar, 'content', 42, { cadre: u.cadre })}</button>
       </header>
       <main class="club-contenu" data-contenu></main>
       <nav class="club-onglets">${(['club', 'kiosque', 'classement', 'profil'] as const).map((o) => `
@@ -77,6 +76,7 @@ export class EcranHall {
     </div>`);
     racine.replaceChildren(this.el);
     $('[data-profil]', this.el).onclick = () => a.profil();
+    $('[data-accueil]', this.el).onclick = () => { if (memoire.onglet === 'club' && !memoire.jeu && !memoire.salon) return; memoire = { onglet: 'club', jeu: null }; this.afficher(); };
     $('[data-porte]', this.el).onclick = () => this.ouvrirPortefeuille();
     $$('[data-onglet]', this.el).forEach((b) => b.onclick = () => {
       const o = b.dataset.onglet!;
@@ -87,7 +87,6 @@ export class EcranHall {
     });
     this.afficher();
     void this.chargerPortefeuille();
-    void this.chargerRang();
   }
 
   /* ------------------------------ Données ------------------------------ */
@@ -97,18 +96,9 @@ export class EcranHall {
       this.porte = await api<EtatPortefeuille>('/api/portefeuille');
       $('[data-solde]', this.el).textContent = fmt(this.porte.solde);
       this.majVilles();
-      if (memoire.onglet === 'club' && !memoire.jeu) { this.majAnnonces(); this.majRoue(); }
+      if (memoire.onglet === 'club' && !memoire.jeu && !memoire.salon) { this.majAnnonces(); this.majRoue(); }
       if (memoire.onglet === 'kiosque' && !memoire.vueK) this.afficher();
     } catch { $('[data-solde]', this.el).textContent = '—'; }
-  }
-
-  private async chargerRang() {
-    try {
-      const { joueurs } = await api<{ joueurs: { pseudo: string }[] }>('/api/classement');
-      const i = joueurs.findIndex((j) => j.pseudo.toLowerCase() === this.u.pseudo.toLowerCase());
-      this.rang = i >= 0 ? i + 1 : null;
-      if (this.rang) $('[data-rang]', this.el).textContent = this.rang === 1 ? 'Le plus riche du Club !' : `${this.rang}e du classement`;
-    } catch { /* rien */ }
   }
 
   /* ------------------------------ Onglets ------------------------------ */
@@ -127,6 +117,7 @@ export class EcranHall {
       return vueVitrine(c, ctx);
     }
     if (memoire.onglet === 'classement') return void this.vueClassement(c);
+    if (memoire.salon) return this.vueSalon(c, memoire.salon);
     if (memoire.jeu) return this.vueSalle(c, memoire.jeu);
     this.vuePlan(c);
   }
@@ -144,13 +135,17 @@ export class EcranHall {
     rue.addEventListener('click', (e) => {
       const cible = e.target as Element;
       const porte = cible.closest('[data-jeu]') as HTMLElement | null;
-      if (porte) return this.entrerCasino(porte.dataset.jeu as JeuCasino);
-      const lieu = (cible.closest('[data-lieu]') as HTMLElement | null)?.dataset.lieu;
+      const batiment = cible.closest('[data-lieu]') as HTMLElement | null;
+      const lieu = batiment?.dataset.lieu;
+      if (!lieu) return;
       jouerSon('clic');
-      if (lieu === 'casino') this.choisirJeu();
-      else if (lieu === 'kiosque') { memoire = { onglet: 'kiosque', jeu: null }; this.afficher(); }
-      else if (lieu === 'roue') this.ouvrirRoue();
-      else if (lieu === 'salon') this.ouvrirSalon();
+      if (lieu === 'roue') return this.ouvrirRoue();
+      // On « entre » dans le bâtiment : la rue zoome dessus, puis sa page arrive
+      this.entrer(batiment!, () => {
+        if (lieu === 'casino') memoire = { onglet: 'club', jeu: (porte?.dataset.jeu as JeuCasino) ?? 'poker' };
+        else if (lieu === 'kiosque') memoire = { onglet: 'kiosque', jeu: null };
+        else if (lieu === 'salon') memoire = { onglet: 'club', jeu: null, salon: 'poker' };
+      });
     });
     rue.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && (e.target as Element).closest('[data-lieu],[data-jeu]')) { e.preventDefault(); (e.target as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
     // Une flèche invite à faire défiler la rue ; elle disparaît au bout du chemin
@@ -161,7 +156,7 @@ export class EcranHall {
     requestAnimationFrame(majIndice);
     // Le ciel change avec l'heure
     const moment = momentParis();
-    const minuterie = setInterval(() => { if (momentParis() !== moment && memoire.onglet === 'club' && !memoire.jeu) this.afficher(); }, 60_000);
+    const minuterie = setInterval(() => { if (momentParis() !== moment && memoire.onglet === 'club' && !memoire.jeu && !memoire.salon) this.afficher(); }, 60_000);
     this.arrets.push(() => clearInterval(minuterie));
     this.majAnnonces();
     this.majRoue();
@@ -171,33 +166,17 @@ export class EcranHall {
     void this.chargerMissions();
   }
 
-  private entrerCasino(jeu: JeuCasino) { jouerSon('clic'); memoire = { onglet: 'club', jeu }; this.afficher(); }
-
-  /** Toucher le Casino (ailleurs que sur une porte) : choisir son jeu. */
-  private choisirJeu() {
-    const p = panneau(`<h2>Le Casino</h2><p class="doux petit" style="margin:0 0 12px">À quoi on joue ?</p>
-      <div class="choix-jeux">${(['poker', 'blackjack', 'roulette'] as JeuCasino[]).map((j) => `<button class="btn" data-j="${j}">${icone(j)} ${NOMS[j]}</button>`).join('')}</div>`);
-    $$('[data-j]', p.el).forEach((b) => b.onclick = () => { p.fermer(); this.entrerCasino(b.dataset.j as JeuCasino); });
-  }
-
-  /** Le salon Entre potes : les parties perso, sans toucher au portefeuille. */
-  private ouvrirSalon() {
-    const p = panneau(`<h2>Entre potes</h2>
-      <p class="doux petit" style="margin:0 0 14px">Tes parties perso : tu choisis les règles, les jetons sont offerts et ton portefeuille n'est pas touché.</p>
-      <div class="choix-salon">
-        <button class="btn btn-or btn-plein" data-creer>＋ Créer une table</button>
-        <button class="btn btn-ciel btn-plein" data-code>Rejoindre avec un code</button>
-        <button class="btn btn-plein" data-solo>S'entraîner en solo</button>
-      </div>
-      <h3 style="margin:16px 0 8px">Tables ouvertes entre potes</h3><div data-liste-salon></div>`);
-    $('[data-creer]', p.el).onclick = () => { p.fermer(); this.a.creer(); };
-    $('[data-code]', p.el).onclick = () => { p.fermer(); this.demanderCode(); };
-    $('[data-solo]', p.el).onclick = () => { p.fermer(); this.a.solo(); };
-    const ouvertes = this.tables.filter((t) => t.statut !== 'terminee');
-    $('[data-liste-salon]', p.el).innerHTML = ouvertes.length
-      ? ouvertes.map((t) => `<button class="table-salon" data-id="${t.id}"><b>${esc(t.nom)}</b><small>${NOMS[(t.jeu ?? 'poker') as JeuCasino]} · ${t.joueurs}/${t.places} joueurs</small></button>`).join('')
-      : '<span class="doux petit">Aucune pour l\'instant : crée la tienne et envoie le code à tes potes !</span>';
-    $$('[data-id]', p.el).forEach((b) => b.onclick = () => { p.fermer(); this.a.rejoindre(b.dataset.id!); });
+  /** L'animation d'entrée : la rue zoome sur le bâtiment touché, puis la page du bâtiment s'ouvre. */
+  private entrer(batiment: Element, apres: () => void) {
+    const cadre = this.el.querySelector('.rue-cadre') as HTMLElement | null;
+    const fin = () => { apres(); this.afficher(); this.el.querySelector('[data-contenu] > *')?.classList.add('arrivee'); };
+    if (!cadre || matchMedia('(prefers-reduced-motion: reduce)').matches) return fin();
+    const r = cadre.getBoundingClientRect(), b = batiment.getBoundingClientRect();
+    cadre.style.transformOrigin = `${b.left + b.width / 2 - r.left}px ${b.top + b.height * 0.7 - r.top}px`;
+    cadre.classList.add('zoom-entree');
+    cadre.parentElement?.classList.add('on-entre');
+    jouerSon('carte');
+    setTimeout(fin, 420);
   }
 
   /* ------------------------------ Annonces des gros gains ------------------------------ */
@@ -218,7 +197,7 @@ export class EcranHall {
     const recentes = this.annonces.filter((a) => Date.now() - a.date < 24 * 3_600_000).slice(0, 5);
     b.hidden = !recentes.length;
     if (!recentes.length) return;
-    const texte = recentes.map((a) => `<span>🎉 <b>${esc(a.pseudo)}</b> ${esc(a.texte)}</span>`).join('<i>·</i>');
+    const texte = recentes.map((a) => `<span>🎉 <b>${esc(a.pseudo)}</b> ${avecPieces(esc(a.texte))}</span>`).join('<i>·</i>');
     // Le texte est doublé pour défiler en boucle sans à-coup
     d.innerHTML = `${texte}<i>·</i>${texte}<i>·</i>`;
     d.style.animationDuration = `${Math.max(12, recentes.length * 9)}s`;
@@ -263,7 +242,7 @@ export class EcranHall {
     const m = p.bonus.calendrier[p.bonus.jour - 1]?.multiplicateur ?? 1;
     const tour = p.bonus.dispo ? `Tour du jour ${p.bonus.jour} sur 7${m > 1 ? ` · gains ${mult(m)}` : ''}` : p.toursBonus > 0 ? `${p.toursBonus} tour${p.toursBonus > 1 ? 's' : ''} en plus grâce aux missions` : '';
     z.innerHTML = `${tour ? `<button class="annonce bonus" data-tour><span class="mini-roue"><i></i></span><span><b>La Grande Roue t'attend !</b><small>${tour} · touche pour la lancer</small></span></button>` : ''}
-      ${p.coupDePouce ? `<button class="annonce pouce" data-pouce><span class="coffre"><i></i></span><span><b>À sec ? Le Club t'aide</b><small>Coup de pouce de 1 000 ♣, une fois par jour</small></span></button>` : ''}`;
+      ${p.coupDePouce ? `<button class="annonce pouce" data-pouce><span class="coffre"><i></i></span><span><b>À sec ? Le Club t'aide</b><small>Coup de pouce de 1 000 <i class="pc"></i>, une fois par jour</small></span></button>` : ''}`;
     const t = $('[data-tour]', z); if (t) t.onclick = () => this.ouvrirRoue();
     const cp = $('[data-pouce]', z); if (cp) cp.onclick = () => this.coupDePouce(cp);
   }
@@ -361,7 +340,7 @@ export class EcranHall {
     try {
       const avant = this.porte?.solde ?? 0;
       this.porte = await api<EtatPortefeuille>('/api/portefeuille/coup-de-pouce', {});
-      b.innerHTML = '<span class="gain">+1 000 ♣</span>';
+      b.innerHTML = '<span class="gain">+1 000 <i class="pc"></i></span>';
       jouerSon('gagne');
       this.pluieDePieces(b, 8);
       this.compterJusqua(avant, this.porte.solde);
@@ -417,33 +396,57 @@ export class EcranHall {
     } catch { /* rien */ }
   }
 
-  /** Une salle du Casino : les tables ouvertes d'un jeu. */
+  /** Le Casino : une salle par jeu, chacune avec son décor ; on y joue ses Clubs dans les villes. */
   private vueSalle(c: HTMLElement, jeu: JeuCasino) {
-    c.innerHTML = `<div class="salle-jeu">
-      <div class="ligne" style="gap:10px;margin-bottom:12px"><button class="btn btn-rond btn-fantome" data-retour aria-label="Retour au Club">←</button><h1 style="font-size:24px">Le Casino</h1></div>
-      <div class="segments">${(['poker', 'blackjack', 'roulette'] as JeuCasino[]).map((j) => `<button data-seg="${j}" class="${j === jeu ? 'on' : ''}">${NOMS[j]}</button>`).join('')}</div>
+    const deco: Record<JeuCasino, string> = {
+      poker: `<span class="deco-titre">Texas Hold'em</span><small>No-limit · tables de 6 · règles officielles</small>`,
+      blackjack: `<span class="deco-titre">Black Jack</span><small>Le Black Jack paie 3 contre 2 · le croupier tire jusqu'à 16</small>`,
+      roulette: `<span class="deco-titre">Roulette européenne</span><small>37 cases · un seul zéro · la partage</small>`,
+    };
+    c.innerHTML = `<div class="page-batiment page-casino theme-${jeu}">
+      <div class="fronton">
+        <button class="btn btn-rond btn-fantome" data-retour aria-label="Retour à la rue">←</button>
+        <div class="marquise"><b>CASINO</b></div>
+      </div>
+      <div class="onglets-jeux">${(['poker', 'blackjack', 'roulette'] as JeuCasino[]).map((j) => `<button data-seg="${j}" class="j-${j} ${j === jeu ? 'on' : ''}"><span class="ico">${icone(j)}</span>${NOMS[j]}</button>`).join('')}</div>
+      <div class="decor-salle"><div class="tapis-salle">${deco[jeu]}</div></div>
       <button class="apprendre-salle" data-apprendre><span>🎓</span><span><b>Apprendre à jouer ${jeu === 'roulette' ? 'à la' : 'au'} ${NOMS[jeu]}</b><small>Une leçon de 2 minutes, avec des mises en situation</small></span><i>›</i></button>
-      <h3 class="titre-rubrique" style="margin-top:4px">Le Casino · avec tes Clubs ♣</h3>
-      <p class="doux petit" style="margin:0 0 10px">La cave est prélevée sur ton portefeuille. En te levant, tes jetons y retournent.</p>
+      <h3 class="titre-rubrique">Choisis ta ville</h3>
+      <p class="doux petit" style="margin:0 0 10px">Ici on joue avec tes vrais Clubs <i class="pc"></i> : la cave est prélevée sur ton portefeuille, et en te levant tes jetons y retournent.</p>
       <div class="villes" data-villes></div>
-      <h3 class="titre-rubrique">Entre potes · jetons offerts</h3>
-      <p class="doux petit" style="margin:0 0 10px">Rien en jeu : ton portefeuille n'est pas touché.</p>
-      <div class="actions-salle">
-        <button class="btn btn-or" data-creer>＋ Créer une table</button>
-        <button class="btn btn-ciel" data-code>Rejoindre avec un code</button>
-        <button class="btn" data-solo>Jouer en solo</button>
+      <button class="vers-salon" data-vers-salon><span class="neon-mini">Entre potes</span><span><b>Envie de jouer sans miser tes Clubs ?</b><small>Au salon Entre potes : jetons offerts, tes règles, une table rien que pour tes potes.</small></span><i>›</i></button>
+    </div>`;
+    $('[data-retour]', c).onclick = () => { memoire = { onglet: 'club', jeu: null }; this.afficher(); };
+    $$('[data-seg]', c).forEach((b) => b.onclick = () => { jouerSon('clic'); memoire.jeu = b.dataset.seg as JeuCasino; this.afficher(); });
+    $('[data-apprendre]', c).onclick = () => ouvrirApprendre(jeu, (j) => this.a.solo(j));
+    $('[data-vers-salon]', c).onclick = () => { jouerSon('clic'); memoire = { onglet: 'club', jeu: null, salon: jeu }; this.afficher(); this.el.querySelector('[data-contenu] > *')?.classList.add('arrivee'); };
+    this.majVilles();
+  }
+
+  /** Le salon Entre potes : les parties perso, avec des jetons offerts. */
+  private vueSalon(c: HTMLElement, jeu: JeuCasino) {
+    c.innerHTML = `<div class="page-batiment page-salon">
+      <div class="fronton">
+        <button class="btn btn-rond btn-fantome" data-retour aria-label="Retour à la rue">←</button>
+        <div class="enseigne-salon">Entre potes</div>
+      </div>
+      <div class="intro-salon">
+        <p><b>Ici, rien n'est en jeu.</b> Jetons offerts, ton portefeuille n'est jamais touché. Tu choisis les règles et tu invites tes potes avec un code.</p></div>
+      <div class="onglets-jeux salon">${(['poker', 'blackjack', 'roulette'] as JeuCasino[]).map((j) => `<button data-seg="${j}" class="j-${j} ${j === jeu ? 'on' : ''}"><span class="ico">${icone(j)}</span>${NOMS[j]}</button>`).join('')}</div>
+      <div class="actions-salon">
+        <button class="btn btn-or btn-plein" data-creer>＋ Créer une table de ${NOMS[jeu]}</button>
+        <div class="deux"><button class="btn btn-ciel" data-code>Rejoindre avec un code</button><button class="btn" data-solo>S'entraîner en solo</button></div>
       </div>
       <div class="ligne" style="justify-content:space-between;margin:18px 0 10px"><h2 style="font-size:20px">Tables ouvertes</h2><span class="doux petit" data-enligne></span></div>
       <div data-tables></div>
     </div>`;
     $('[data-retour]', c).onclick = () => { memoire = { onglet: 'club', jeu: null }; this.afficher(); };
-    $$('[data-seg]', c).forEach((b) => b.onclick = () => { memoire.jeu = b.dataset.seg as JeuCasino; this.afficher(); });
+    $$('[data-seg]', c).forEach((b) => b.onclick = () => { jouerSon('clic'); memoire.salon = b.dataset.seg as JeuCasino; this.afficher(); });
     $('[data-creer]', c).onclick = () => this.a.creer(jeu);
     $('[data-solo]', c).onclick = () => this.a.solo(jeu);
-    $('[data-apprendre]', c).onclick = () => ouvrirApprendre(jeu, (j) => this.a.solo(j));
     $('[data-code]', c).onclick = () => this.demanderCode();
-    this.majVilles();
     this.majListe();
+    this.majComptes();
   }
 
   private demanderCode() {
@@ -473,7 +476,7 @@ export class EcranHall {
 
   private async vueClassement(c: HTMLElement) {
     c.innerHTML = `<div class="classement-vue"><h1 style="font-size:26px;margin-bottom:4px">Les plus riches du Club</h1>
-      <p class="doux petit" style="margin:0 0 14px">Classés par Clubs ♣ dans le portefeuille</p><div data-liste><span class="doux">Chargement…</span></div>
+      <p class="doux petit" style="margin:0 0 14px">Classés par Clubs <i class="pc"></i> dans le portefeuille</p><div data-liste><span class="doux">Chargement…</span></div>
       <button class="btn btn-plein" data-stats style="margin-top:16px">Statistiques de jeu des joueurs</button></div>`;
     $('[data-stats]', c).onclick = () => this.a.joueurs();
     try {
@@ -509,9 +512,9 @@ export class EcranHall {
 
   /** Les villes du Casino pour le jeu choisi. */
   private majVilles() {
-    const zone = $('[data-villes]', this.el);
+    const zone = this.el.querySelector('[data-villes]') as HTMLElement | null;
     const jeu = memoire.jeu;
-    if (!zone || !jeu) return;
+    if (!zone || !jeu || memoire.salon) return;
     const solde = this.porte?.solde ?? 0;
     const enjeux = (v: Ville) => jeu === 'poker' ? `Blindes ${fmt(v.poker.pb)} / ${fmt(v.poker.pb * 2)}` : jeu === 'blackjack' ? `Mise ${fmt(v.blackjack.miseMin)} à ${fmt(v.blackjack.miseMax)}` : `Jeton min. ${fmt(v.roulette.miseMin)}`;
     zone.innerHTML = VILLES.map((v) => {
@@ -529,11 +532,12 @@ export class EcranHall {
   }
 
   private majListe() {
-    const zone = $('[data-tables]', this.el);
-    if (!zone || !memoire.jeu) return;
-    const tables = this.tables.filter((t) => t.jeu === memoire.jeu);
+    const zone = this.el.querySelector('[data-tables]') as HTMLElement | null;
+    const jeu = memoire.salon;
+    if (!zone || !jeu) return;
+    const tables = this.tables.filter((t) => (t.jeu ?? 'poker') === jeu);
     if (!tables.length) {
-      zone.innerHTML = `<div class="vide-liste">Aucune table de ${NOMS[memoire.jeu]} ouverte pour l'instant.<br>Crée la tienne et envoie le code à tes potes !</div>`;
+      zone.innerHTML = `<div class="vide-liste">Aucune table de ${NOMS[jeu]} ouverte pour l'instant.<br>Crée la tienne et envoie le code à tes potes !</div>`;
       return;
     }
     zone.innerHTML = `<div class="tables">${tables.map((t) => {

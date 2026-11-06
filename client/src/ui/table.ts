@@ -186,7 +186,7 @@ export class EcranTable {
     const r = e.reglages;
     $('[data-nom]', this.el).textContent = r.nom;
     const infos = [`Blindes ${fmt(r.pb)}/${fmt(r.gb)}`];
-    if (this.canal.casino) infos.unshift('♣ en Clubs');
+    if (this.canal.casino) infos.unshift('Partie en Clubs');
     if (e.numeroMain) infos.push(`Main ${e.numeroMain}`);
     if (e.finPrevue !== null) infos.push(`Fin dans ${Math.ceil(e.finPrevue / 60000)} min`);
     if (e.spectateurs.length) infos.push(`👁 ${e.spectateurs.length}`);

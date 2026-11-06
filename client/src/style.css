@@ -1,4 +1,5 @@
 :root {
+  --piece: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PGRlZnM+PHJhZGlhbEdyYWRpZW50IGlkPSJvIiBjeD0iLjM1IiBjeT0iLjMiIHI9Ii44Ij48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNGRkYwQTgiLz48c3RvcCBvZmZzZXQ9Ii40NSIgc3RvcC1jb2xvcj0iI0ZGQzkzRCIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI0Q5OEEwQiIvPjwvcmFkaWFsR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJpIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjRkZEODYwIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRURBMjFBIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMjkuNSIgZmlsbD0idXJsKCNvKSIgc3Ryb2tlPSIjMkExRTNGIiBzdHJva2Utd2lkdGg9IjMuNSIvPjxjaXJjbGUgY3g9IjMyIiBjeT0iMzIiIHI9IjIzLjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0I5NzcwQSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtZGFzaGFycmF5PSIzLjIgMi42IiBvcGFjaXR5PSIuNTUiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIxOS41IiBmaWxsPSJ1cmwoI2kpIiBzdHJva2U9IiNCOTc3MEEiIHN0cm9rZS13aWR0aD0iMS42Ii8+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCAxLjIpIiBmaWxsPSIjRkZGM0I4IiBvcGFjaXR5PSIuODUiPjxjaXJjbGUgY3g9IjMyIiBjeT0iMjMiIHI9IjYuMiIvPjxjaXJjbGUgY3g9IjI0LjYiIGN5PSIzMS4yIiByPSI2LjIiLz48Y2lyY2xlIGN4PSIzOS40IiBjeT0iMzEuMiIgcj0iNi4yIi8+PHBhdGggZD0iTTMyIDI5IEwyOCA0My41IGg4eiIvPjwvZz48ZyBmaWxsPSIjMkExRTNGIj48Y2lyY2xlIGN4PSIzMiIgY3k9IjIyIiByPSI2LjIiLz48Y2lyY2xlIGN4PSIyNC42IiBjeT0iMzAuMiIgcj0iNi4yIi8+PGNpcmNsZSBjeD0iMzkuNCIgY3k9IjMwLjIiIHI9IjYuMiIvPjxjaXJjbGUgY3g9IjMyIiBjeT0iMjkiIHI9IjQiLz48cGF0aCBkPSJNMzIgMjggTDI4IDQyLjUgaDh6Ii8+PC9nPjxwYXRoIGQ9Ik0xMyAyNCBBMjEgMjEgMCAwIDEgMzAgMTAuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjMuMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBvcGFjaXR5PSIuNyIvPjwvc3ZnPg==);
   --nuit: #231A3B; --nuit2: #2F2450; --nuit3: #3A2D5E; --trait: #2A1E3F;
   --or: #FFC23D; --or2: #E59A12; --creme: #FFF4DF; --corail: #FF6B5B; --ciel: #46C2F0; --prune: #8E5BD6; --vert: #43B072;
   --doux: #C9B9E8;
@@ -1100,3 +1101,70 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .ticket-grand.t-trefle .entete-ticket b { visibility: hidden; }
 .ticket-grand.t-trefle .entete-ticket { margin-bottom: -46px; position: relative; z-index: 1; }
 .ticket-grand.t-trefle .regle-ticket { order: 5; }
+
+/* La pièce Club (image, pas d'émoji) */
+.pc { display: inline-block; width: 1.05em; height: 1.05em; vertical-align: -.18em; background: var(--piece) center / contain no-repeat; flex: none; font-style: normal; }
+.piece { background: var(--piece) center / contain no-repeat !important; border: none !important; box-shadow: none !important; color: transparent !important; font-size: 0 !important; }
+.piece-vol { background: var(--piece) center / contain no-repeat !important; color: transparent !important; border: none !important; box-shadow: none !important; }
+
+/* ======================= En-tête : le nom du jeu ======================= */
+.logo-club { flex: 1; min-width: 0; background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
+.logo-club .logo { font-size: clamp(18px, 5.2vw, 30px); gap: 6px; white-space: nowrap; }
+.logo-club .logo b, .logo-club .logo i { -webkit-text-stroke: 6px var(--trait); }
+.club-moi { flex: none; }
+.club-moi svg { width: 42px; height: 42px; }
+
+/* ======================= Entrer dans un bâtiment ======================= */
+.rue-cadre.zoom-entree { animation: zoom-entree .42s cubic-bezier(.5,0,.75,0) forwards; z-index: 5; }
+.club-plan-zone.on-entre > :not(.rue-cadre) { opacity: 0; transition: opacity .25s; }
+@keyframes zoom-entree { to { transform: scale(2.6); opacity: 0; filter: blur(2px); } }
+.arrivee { animation: arrivee .45s cubic-bezier(.2,.9,.3,1.1); }
+@keyframes arrivee { from { transform: scale(.94) translateY(14px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .rue-cadre.zoom-entree, .arrivee { animation: none; } }
+
+/* ======================= Pages des bâtiments ======================= */
+.page-batiment { --accent: var(--or); --feutre1: #2BA066; --feutre2: #17744A; }
+.page-casino.theme-blackjack { --accent: #46C2F0; --feutre1: #2B7FA8; --feutre2: #164E6E; }
+.page-casino.theme-roulette { --accent: #FF6B5B; --feutre1: #B2283A; --feutre2: #6E1220; }
+.fronton { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.marquise { flex: 1; position: relative; text-align: center; background: var(--trait); border: 3px solid var(--trait); border-radius: 14px; padding: 8px 10px; box-shadow: 0 0 0 3px #8E3B6E, 0 6px 0 var(--trait); background-image: radial-gradient(circle, #FFC23D 2.4px, transparent 3px), radial-gradient(circle, #FFF4DF 2.4px, transparent 3px); background-size: 14px 100%, 14px 100%; background-position: 0 -14px, 7px calc(100% + 14px); background-repeat: repeat-x; }
+.marquise b { font-family: Fredoka; font-weight: 700; font-size: 30px; letter-spacing: 6px; color: #FFC23D; text-shadow: 0 0 10px rgba(255,194,61,.6); }
+.marquise { background-color: var(--trait); padding: 14px 10px; background-image: radial-gradient(circle, #FFC23D 2.6px, transparent 3.2px), radial-gradient(circle, #FFC23D 2.6px, transparent 3.2px); background-size: 14px 14px; background-position: 4px 2px, 4px calc(100% - 2px); background-repeat: repeat-x; animation: marquise 1s steps(2) infinite; }
+@keyframes marquise { 50% { background-position: 11px 2px, 11px calc(100% - 2px); } }
+.onglets-jeux { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.onglets-jeux button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px 8px; border-radius: 16px; border: 3px solid var(--trait); background: var(--nuit2); color: var(--doux); font-family: Fredoka; font-weight: 600; font-size: 15px; cursor: pointer; box-shadow: 0 4px 0 var(--trait); transition: transform .1s; }
+.onglets-jeux button .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--creme); border: 2.5px solid var(--trait); display: grid; place-items: center; }
+.onglets-jeux button .ico .sym { font-size: 22px; color: var(--trait); }
+.onglets-jeux button .ico .sym.or { font-size: 17px; color: #E5484D; font-family: Fredoka; font-weight: 700; }
+.onglets-jeux button.on { color: var(--trait); transform: translateY(-2px); }
+.onglets-jeux button.j-poker.on { background: #43B072; }
+.onglets-jeux button.j-blackjack.on { background: #46C2F0; }
+.onglets-jeux button.j-roulette.on { background: #FF6B5B; }
+.decor-salle { margin-bottom: 12px; }
+.tapis-salle { position: relative; overflow: hidden; border: 3px solid var(--trait); border-radius: 22px; padding: 18px 16px; min-height: 96px; display: flex; flex-direction: column; justify-content: center; gap: 4px; color: var(--creme); background: radial-gradient(ellipse at 30% 40%, var(--feutre1), var(--feutre2)); box-shadow: inset 0 0 0 5px rgba(255,255,255,.08), 0 5px 0 var(--trait); }
+.tapis-salle .deco-titre { font-family: Fredoka; font-weight: 700; font-size: 24px; text-shadow: 2px 2px 0 rgba(0,0,0,.25); }
+.tapis-salle small { font-weight: 800; font-size: 13px; opacity: .9; max-width: 70%; }
+/* Le décor de chaque salle */
+.theme-poker .tapis-salle::after { content: ''; position: absolute; right: -6px; bottom: -8px; width: 120px; height: 90px; background:
+  radial-gradient(circle at 30px 60px, #FF6B5B 0 17px, #2A1E3F 17px 20px, transparent 20px),
+  radial-gradient(circle at 60px 52px, #46C2F0 0 17px, #2A1E3F 17px 20px, transparent 20px),
+  radial-gradient(circle at 90px 62px, #FFC23D 0 17px, #2A1E3F 17px 20px, transparent 20px); }
+.theme-poker .tapis-salle::before { content: '♠\FE0E ♥\FE0E'; position: absolute; right: 18px; top: 8px; font-size: 28px; color: rgba(255,255,255,.22); letter-spacing: 4px; }
+.theme-blackjack .tapis-salle { background: radial-gradient(ellipse at 50% -30%, var(--feutre1) 40%, var(--feutre2)); }
+.theme-blackjack .tapis-salle::before { content: ''; position: absolute; left: 50%; bottom: -150px; width: 360px; height: 200px; transform: translateX(-50%); border: 3px solid rgba(255,194,61,.55); border-radius: 50%; }
+.theme-blackjack .tapis-salle::after { content: '21'; position: absolute; right: 16px; top: 50%; transform: translateY(-50%) rotate(-8deg); width: 56px; height: 76px; border-radius: 8px; background: var(--creme); border: 3px solid var(--trait); color: #E5484D; font-family: Fredoka; font-weight: 700; font-size: 28px; display: grid; place-items: center; box-shadow: -14px 6px 0 -3px #fff, -14px 6px 0 0 var(--trait); }
+.theme-roulette .tapis-salle::after { content: ''; position: absolute; right: -24px; top: 50%; width: 120px; height: 120px; transform: translateY(-50%); border-radius: 50%; border: 3px solid var(--trait);
+  background: radial-gradient(circle, #FFC23D 0 9px, #2A1E3F 9px 11px, #6B3E1F 11px 30px, transparent 30px), repeating-conic-gradient(#D7263D 0 10deg, #1d1a2a 10deg 20deg); animation: tourne-roue 14s linear infinite; }
+.vers-salon { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; margin-top: 16px; background: linear-gradient(135deg, #C8643C, #9C4527); color: var(--creme); border: 3px solid var(--trait); border-radius: 18px; padding: 12px 14px; box-shadow: 0 5px 0 var(--trait); cursor: pointer; font-family: Nunito; }
+.vers-salon b { display: block; font-family: Fredoka; font-weight: 600; font-size: 16px; }
+.vers-salon small { font-size: 12.5px; font-weight: 800; opacity: .92; }
+.vers-salon i { margin-left: auto; font-style: normal; font-size: 26px; font-weight: 800; }
+.neon-mini { flex: none; background: var(--trait); color: #FF7FD0; border-radius: 10px; padding: 6px 8px; font-family: Fredoka; font-weight: 700; font-size: 13px; text-shadow: 0 0 6px rgba(255,127,208,.8); transform: rotate(-4deg); }
+/* Le salon Entre potes */
+.page-salon { background: repeating-linear-gradient(0deg, transparent 0 22px, rgba(0,0,0,.06) 22px 24px); border-radius: 18px; }
+.enseigne-salon { flex: 1; text-align: center; background: var(--trait); border: 3px solid #C8643C; border-radius: 30px; padding: 8px; font-family: Fredoka; font-weight: 700; font-size: 28px; color: #FF7FD0; text-shadow: 0 0 10px rgba(255,127,208,.85); box-shadow: 0 6px 0 var(--trait); animation: neon 4s steps(1) infinite; }
+.intro-salon { background: linear-gradient(135deg, #C8643C, #9C4527); border: 3px solid var(--trait); border-radius: 18px; padding: 12px 14px; box-shadow: 0 5px 0 var(--trait); margin-bottom: 12px; }
+.intro-salon p { margin: 0; font-weight: 700; font-size: 14.5px; line-height: 1.45; }
+.actions-salon { display: flex; flex-direction: column; gap: 10px; }
+.actions-salon .deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.actions-salon .btn { white-space: normal; }

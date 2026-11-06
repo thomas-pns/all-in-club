@@ -183,3 +183,6 @@ if (typeof document !== 'undefined') {
  */
 export const suspense = { kiosque: false, table: (() => false) as () => boolean };
 export const enSuspense = () => suspense.kiosque || suspense.table();
+
+/** Remplace le ♣ des montants (textes venus du serveur, déjà échappés) par l'image de la pièce. */
+export const avecPieces = (texteEchappe: string) => texteEchappe.replace(/♣\uFE0E?/g, '<i class="pc"></i>');

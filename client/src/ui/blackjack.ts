@@ -171,7 +171,7 @@ export class EcranBJ {
     const r = e.reglages;
     $('[data-nom]', this.el).textContent = r.nom;
     const infos = [`Mise ${fmt(r.miseMin)} à ${fmt(r.miseMax)}`];
-    if (this.canal.casino) infos.unshift('♣ en Clubs');
+    if (this.canal.casino) infos.unshift('Partie en Clubs');
     if (e.numeroManche) infos.push(r.manches ? `Manche ${e.numeroManche}/${r.manches}` : `Manche ${e.numeroManche}`);
     if (e.spectateurs.length) infos.push(`👁 ${e.spectateurs.length}`);
     $('[data-infos]', this.el).textContent = infos.join(' · ');

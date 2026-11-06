@@ -22,7 +22,7 @@ export interface ContexteKiosque {
   nettoyer(f: () => void): void;
 }
 
-const clubs = (n: number) => `${fmt(n)} ♣`;
+const clubs = (n: number) => `${fmt(n)}&nbsp;<i class="pc"></i>`;
 const heure = (t: number) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const duree = (ms: number) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const erreur = (e: unknown) => toast(e instanceof ErreurApi ? e.message : 'Le Kiosque ne répond pas', true);
@@ -59,7 +59,7 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   let decalage = 0, cagnotte: number | null = null;
   void api<{ maintenant: number; cagnotte: number }>('/api/kiosque/loto').then((r) => {
     decalage = r.maintenant - Date.now(); cagnotte = r.cagnotte;
-    const el = $('[data-cagnotte]', c); if (el) el.textContent = `5 numéros + 1 étoile · cagnotte ${clubs(cagnotte)}`;
+    const el = $('[data-cagnotte]', c); if (el) el.innerHTML = `5 numéros + 1 étoile · cagnotte ${clubs(cagnotte)}`;
   }).catch(() => {});
   const tic = () => {
     const t = Date.now() + decalage;
@@ -194,17 +194,17 @@ function ouvrirReglesTicket(type: TypeTicket) {
 function accroche(type: TypeTicket) {
   return type === 'banco' ? '3 montants identiques ? Tu gagnes ce montant.'
     : type === 'coffre' ? 'Un de tes lingots porte un numéro gagnant ? Tu gagnes le lot écrit dessous.'
-    : type === 'trefle' ? 'Tes numéros parmi les gagnants rapportent leur lot. Un ♣ gagne directement !'
+    : type === 'trefle' ? 'Tes numéros parmi les gagnants rapportent leur lot. Un ♣\uFE0E gagne directement !'
     : '3 jeux sur un ticket : les gains s\'additionnent.';
 }
 
 const lot = (n: number) => (n ? fmt(n) : '');
-const numero = (n: number | null) => (n === null ? '♣' : n ? String(n) : '');
+const numero = (n: number | null) => (n === null ? '♣\uFE0E' : n ? String(n) : '');
 
 function contenuHTML(r: ReponseTicket): string {
   if (r.type === 'banco') {
     const ct = r.contenu as ContenuBanco;
-    return `<div class="grille-banco">${ct.cases.map((v, i) => `<span data-grat data-id="c${i}"><b>${lot(v)}</b><small>${v ? '♣' : ''}</small></span>`).join('')}</div>`;
+    return `<div class="grille-banco">${ct.cases.map((v, i) => `<span data-grat data-id="c${i}"><b>${lot(v)}</b><small>${v ? '<i class="pc"></i>' : ''}</small></span>`).join('')}</div>`;
   }
   if (r.type === 'coffre') {
     const ct = r.contenu as ContenuCoffre;
@@ -221,7 +221,7 @@ function contenuHTML(r: ReponseTicket): string {
   }
   if (r.type === 'trefle') {
     const ct = r.contenu as ContenuTrefle;
-    return `<div class="trefle-haut"><span class="logo-trefle">TRÈFLE<br><em>♣CASH</em></span><span class="chance-trefle">PLUS<br><b>D'1 CHANCE<br>SUR 4</b><br>DE GAGNER</span></div>
+    return `<div class="trefle-haut"><span class="logo-trefle">TRÈFLE<br><em>♣\uFE0ECASH</em></span><span class="chance-trefle">PLUS<br><b>D'1 CHANCE<br>SUR 4</b><br>DE GAGNER</span></div>
       <div class="cadre-trefle"><span class="titre-cadre">N° GAGNANTS</span><div class="etoiles-trefle">${ct.gagnants.map((n, i) => `<span class="etoile-trefle" data-grat data-id="g${i}"><b>${n || ''}</b></span>`).join('')}</div></div>
       <div class="cadre-trefle"><span class="titre-cadre">VOS NUMÉROS</span><div class="grille-trefle">${ct.cases.map((x, i) => `<span data-grat data-id="c${i}" class="${x.n === null ? 'trefle-direct' : ''}"><b>${numero(x.n)}</b><small>${lot(x.lot)}</small></span>`).join('')}</div></div>`;
   }
@@ -359,10 +359,10 @@ export function vueKeno(c: HTMLElement, ctx: ContexteKiosque) {
     $$('[data-tirages]', c).forEach((b) => b.classList.toggle('on', Number(b.dataset.tirages) === tiragesKeno));
     $('[data-compte]', c).textContent = `${choixKeno.length} / 10`;
     const g = KENO_GAINS[choixKeno.length];
-    $('[data-bareme]', c).innerHTML = g ? `<small>Avec ${choixKeno.length} numéro${choixKeno.length > 1 ? 's' : ''} et ${miseKeno} ♣ :</small>${Object.entries(g).sort((a, b) => +b[0] - +a[0]).map(([k, mult]) => `<span>${k} bon${+k > 1 ? 's' : ''} → <b>${clubs(mult * miseKeno)}</b></span>`).join('')}` : '<small>Coche entre 1 et 10 numéros</small>';
+    $('[data-bareme]', c).innerHTML = g ? `<small>Avec ${choixKeno.length} numéro${choixKeno.length > 1 ? 's' : ''} et ${miseKeno} <i class="pc"></i> :</small>${Object.entries(g).sort((a, b) => +b[0] - +a[0]).map(([k, mult]) => `<span>${k} bon${+k > 1 ? 's' : ''} → <b>${clubs(mult * miseKeno)}</b></span>`).join('')}` : '<small>Coche entre 1 et 10 numéros</small>';
     const b = $('[data-jouer]', c) as HTMLButtonElement;
     b.disabled = !choixKeno.length;
-    b.textContent = `Jouer ${clubs(miseKeno * tiragesKeno)}${tiragesKeno > 1 ? ` (${tiragesKeno} tirages)` : ''}`;
+    b.innerHTML = `Jouer ${clubs(miseKeno * tiragesKeno)}${tiragesKeno > 1 ? ` (${tiragesKeno} tirages)` : ''}`;
   };
   $$('[data-n]', c).forEach((b) => b.onclick = () => {
     const n = Number(b.dataset.n);
@@ -399,7 +399,7 @@ export function vueKeno(c: HTMLElement, ctx: ContexteKiosque) {
       const t = g.tirage === etat!.dernier?.id ? etat!.dernier.numeros : null;
       return `<div class="ma-grille"><span class="quand">${g.gain === null ? `Tirage de ${heure(g.tirage * KENO.periode)}` : `n° ${g.tirage}`}</span>
         <span class="nums">${g.numeros.map((n) => `<i class="${t?.includes(n) ? 'bon' : ''}">${n}</i>`).join('')}</span>
-        <b class="${g.gain ? 'plus' : ''}">${g.gain === null ? `${fmt(g.mise)} ♣` : g.gain ? `+${fmt(g.gain)}` : 'perdu'}</b></div>`;
+        <b class="${g.gain ? 'plus' : ''}">${g.gain === null ? `${fmt(g.mise)} <i class="pc"></i>` : g.gain ? `+${fmt(g.gain)}` : 'perdu'}</b></div>`;
     }).join('') : '<span class="doux petit">Aucune grille pour l\'instant</span>';
   }
 
@@ -511,14 +511,14 @@ export function vueLoto(c: HTMLElement, ctx: ContexteKiosque) {
     try { etat = await api<EtatLoto>('/api/kiosque/loto'); } catch { return; }
     decalage = etat.maintenant - Date.now();
     if (!c.isConnected) return;
-    $('[data-cagnotte]', c).textContent = clubs(etat.cagnotte);
+    $('[data-cagnotte]', c).innerHTML = clubs(etat.cagnotte);
     $('[data-heure]', c).textContent = heure(etat.prochain.heure);
     afficherDernier();
     $('[data-grilles]', c).innerHTML = etat.grilles.length ? etat.grilles.map((g) => {
       const t = g.tirage === etat!.dernier?.id ? etat!.dernier : null;
       return `<div class="ma-grille"><span class="quand">${g.gain === null ? `Tirage de ${heure(g.tirage * LOTO.periode)}` : g.rang ?? `n° ${g.tirage}`}</span>
         <span class="nums">${g.numeros.map((n) => `<i class="${t?.numeros.includes(n) ? 'bon' : ''}">${n}</i>`).join('')}<i class="etoile ${t?.etoile === g.etoile ? 'bon' : ''}">★${g.etoile}</i></span>
-        <b class="${g.gain ? 'plus' : ''}">${g.gain === null ? `${fmt(LOTO.prix)} ♣` : g.gain ? `+${fmt(g.gain)}` : 'perdu'}</b></div>`;
+        <b class="${g.gain ? 'plus' : ''}">${g.gain === null ? `${fmt(LOTO.prix)} <i class="pc"></i>` : g.gain ? `+${fmt(g.gain)}` : 'perdu'}</b></div>`;
     }).join('') : '<span class="doux petit">Aucune grille pour l\'instant</span>';
   }
 

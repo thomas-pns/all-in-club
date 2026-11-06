@@ -24,7 +24,7 @@ import { SalleRoulette, ReglagesRoulette, MessageRoulette } from '../../moteur/r
 import { EcranHall } from './ui/club';
 import type { JeuCasino } from './ui/ecrans';
 import { ecranConnexion, ecranReinitialiser, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces, afficherBanniere } from './ui/ecrans';
-import { toast, html, esc, suspense } from './ui/commun';
+import { toast, html, esc, suspense, avecPieces } from './ui/commun';
 import { debloquerSon, reglerSon, jouerSon } from './vue/son';
 import { volumeMusique } from './vue/musique';
 import { lirePrefs, suivrePrefs, definirNotifications, ecrirePrefs } from './ui/commun';
@@ -116,15 +116,15 @@ function surMessage(m: MessageServeur) {
       const a = m.annonce;
       // Pas la peine de se l'annoncer à soi-même : on vient de le voir
       if (a.pseudo.toLowerCase() === utilisateur?.pseudo.toLowerCase()) { hall?.nouvelleAnnonce(a); break; }
-      afficherBanniere({ icone: '🎉', surtitre: 'Gros gain au Club', titre: esc(a.pseudo), texte: esc(a.texte), genre: 'gain', son: null, avant: () => hall?.nouvelleAnnonce(a) });
+      afficherBanniere({ icone: '🎉', surtitre: 'Gros gain au Club', titre: esc(a.pseudo), texte: avecPieces(esc(a.texte)), genre: 'gain', son: null, avant: () => hall?.nouvelleAnnonce(a) });
       break;
     }
     case 'mission': {
       const etat = m.etat;
       // La récompense (et le solde) n'apparaît qu'une fois le résultat vu à l'écran
       afficherBanniere({
-        icone: '✅', surtitre: 'Mission réussie !', titre: esc(m.mission.texte), genre: 'mission', son: 'gagne',
-        texte: `+${m.mission.recompense.toLocaleString('fr-FR')} ♣${m.toutes ? ' · les 3 sont faites : un tour de Grande Roue en plus !' : ''}`,
+        icone: '✅', surtitre: 'Mission réussie !', titre: avecPieces(esc(m.mission.texte)), genre: 'mission', son: 'gagne',
+        texte: `+${m.mission.recompense.toLocaleString('fr-FR')} <i class="pc"></i>${m.toutes ? ' · les 3 sont faites : un tour de Grande Roue en plus !' : ''}`,
         avant: () => hall?.missionFaite(etat),
       });
       break;

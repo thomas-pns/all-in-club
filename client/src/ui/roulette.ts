@@ -177,7 +177,7 @@ export class EcranRoulette {
     const r = e.reglages;
     $('[data-nom]', this.el).textContent = r.nom;
     const infos = [`Jeton min. ${fmt(r.miseMin)}`];
-    if (this.canal.casino) infos.unshift('♣ en Clubs');
+    if (this.canal.casino) infos.unshift('Partie en Clubs');
     if (e.numeroTour) infos.push(r.tours ? `Tour ${e.numeroTour}/${r.tours}` : `Tour ${e.numeroTour}`);
     if (e.spectateurs.length) infos.push(`👁 ${e.spectateurs.length}`);
     $('[data-infos]', this.el).textContent = infos.join(' · ');
