@@ -1,3 +1,4 @@
+import { ouvrirInvitation } from './amis';
 /**
  * Écran de Black Jack : la scène PixiJS + l'interface (mises, décisions, conseil, hôte, fin de partie).
  * Fonctionne en ligne (WebSocket) et en solo (salle locale), comme l'écran de poker.
@@ -198,13 +199,14 @@ export class EcranBJ {
       return;
     }
     c.innerHTML = `<h2>${this.canal.enLigne ? 'Invite tes potes !' : 'Prêt à jouer ?'}</h2>
-      ${this.canal.enLigne ? `<div class="doux petit">Code de la table</div><div class="gros-code" data-copier title="Copier">${esc(e.code)}</div>` : ''}
+      ${this.canal.enLigne ? `<div class="doux petit">Code de la table</div><div class="gros-code" data-copier title="Copier">${esc(e.code)}</div><button class="btn btn-petit btn-ciel" data-inviter-amis style="margin-top:6px">👥 Inviter des amis</button>` : ''}
       <p class="doux" style="margin:6px 0 14px">${nb} joueur${nb > 1 ? 's' : ''} sur ${e.reglages.places} · ${fmt(e.reglages.tapisDepart)} jetons chacun${e.reglages.manches ? ` · ${e.reglages.manches} manches` : ''}</p>
       ${hote ? `<button class="btn btn-or" data-lancer>Lancer la partie</button>
         <p class="doux petit" style="margin:10px 0 0">Tout le monde joue contre le croupier : pas besoin d'attendre d'être plusieurs.</p>`
         : `<p>En attente de l'hôte…</p>`}
       <p style="margin:12px 0 0"><button class="lien" data-regles2>Jamais joué ? Apprends en 2 minutes</button></p>`;
     const cp = $('[data-copier]', c); if (cp) cp.onclick = () => this.copierCode();
+    const ia = c.querySelector('[data-inviter-amis]') as HTMLElement | null; if (ia) ia.onclick = () => void ouvrirInvitation();
     const bl = $('[data-lancer]', c); if (bl) bl.onclick = () => { debloquerSon(); this.canal.envoyer({ c: 'lancer' }); };
     $('[data-regles2]', c).onclick = () => ouvrirReglesBJ();
   }
@@ -486,6 +488,7 @@ export class EcranBJ {
         ${hote && !this.canal.casino ? '<button class="btn btn-or" data-m="hote">Gérer la table (hôte)</button>' : ''}
         <button class="btn" data-m="regles">Comment jouer ?</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
+        ${this.canal.enLigne ? `<button class="btn" data-m="inviter">👥 Inviter des amis</button>` : ''}
         ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}
         ${moi && e.statut !== 'en_jeu' ? '<button class="btn" data-m="lever">Me lever (regarder)</button>' : ''}
         <button class="btn btn-corail" data-m="quitter">Quitter la table</button>
@@ -496,6 +499,7 @@ export class EcranBJ {
         case 'hote': return this.panneauHote();
         case 'regles': return ouvrirReglesBJ();
         case 'code': return this.copierCode();
+        case 'inviter': return void ouvrirInvitation();
         case 'reglages': return ouvrirReglagesPerso();
         case 'lever': return this.canal.envoyer({ c: 'lever' });
         case 'quitter': return void this.quitter();

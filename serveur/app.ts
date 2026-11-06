@@ -16,6 +16,7 @@ import { Donnees } from './donnees.js';
 import { Notifications } from './notifications.js';
 import { Portefeuilles, ErreurPortefeuille } from './portefeuille.js';
 import { Activites } from './activites.js';
+import { Amis, ErreurAmis } from './amis.js';
 import { ROUE } from '../moteur/bonus.js';
 import { Kiosque, fmtClubs } from './kiosque.js';
 import { TICKETS, KENO, KENO_GAINS, LOTO, LOTO_GAINS } from '../moteur/kiosque.js';
@@ -58,6 +59,9 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   const notifications = new Notifications(o.db, o.urlPublique ?? 'mailto:admin@all-in-club.invalid');
   const hall = new Hall(donnees, notifications, portefeuilles, activites);
   hall.restaurer();
+  const amis = new Amis(o.db, portefeuilles);
+  amis.presence = (u) => hall.presence(u);
+  amis.notifier = (u, m) => hall.notifier(u, m);
   const limiteAuth = limiteur(10, 5 * 60_000);
   const limiteMail = limiteur(3, 15 * 60_000);
 
@@ -65,7 +69,7 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
 
   app.setErrorHandler((e, _req, rep) => {
     if (e instanceof ErreurCompte) return rep.code(e.code).send({ erreur: e.message });
-    if (e instanceof ErreurPortefeuille) return rep.code(400).send({ erreur: e.message });
+    if (e instanceof ErreurPortefeuille || e instanceof ErreurAmis) return rep.code(400).send({ erreur: e.message });
     if ((e as any).validation || (e as any).statusCode === 400) return rep.code(400).send({ erreur: 'Requête invalide' });
     app.log.error(e);
     return rep.code(500).send({ erreur: 'Erreur interne' });
@@ -104,6 +108,14 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
     if (ROUE[r.segment].label === 'JACKPOT') activites.annoncer(u, `a décroché le JACKPOT de la Grande Roue : ${fmtClubs(r.clubs)} !`, r.clubs);
     return r;
   });
+  /* Les amis */
+  const pseudoDe = (req: { params: unknown }) => String((req.params as { pseudo?: string }).pseudo ?? '');
+  app.get('/api/amis', async (req) => amis.liste(exigerUtilisateur(req).id));
+  app.post('/api/amis', async (req) => amis.demander(exigerUtilisateur(req).id, String(((req.body ?? {}) as { pseudo?: string }).pseudo ?? '')));
+  app.post('/api/amis/:pseudo/accepter', async (req) => amis.accepter(exigerUtilisateur(req).id, pseudoDe(req)));
+  app.delete('/api/amis/:pseudo', async (req) => amis.retirer(exigerUtilisateur(req).id, pseudoDe(req)));
+  app.post('/api/amis/:pseudo/cadeau', async (req) => amis.offrir(exigerUtilisateur(req).id, pseudoDe(req), ((req.body ?? {}) as { montant?: unknown }).montant));
+  app.post('/api/amis/:pseudo/inviter', async (req) => amis.inviter(exigerUtilisateur(req).id, pseudoDe(req)));
   app.get('/api/missions', async (req) => activites.missions(exigerUtilisateur(req).id));
   app.get('/api/annonces', async (req) => { exigerUtilisateur(req); return { annonces: activites.annonces() }; });
   app.post('/api/portefeuille/coup-de-pouce', async (req) => portefeuilles.coupDePouce(exigerUtilisateur(req).id));

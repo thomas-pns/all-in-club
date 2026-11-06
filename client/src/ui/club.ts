@@ -19,6 +19,7 @@ import { avatarSVG } from '../art/avatars';
 import { jouerSon } from '../vue/son';
 import { $, $$, esc, html, toast, panneau, avatar, avecPieces, logoHTML } from './commun';
 import { vueVitrine, vueTicket, vueKeno, vueLoto, ContexteKiosque } from './kiosque';
+import { vueAmis } from './amis';
 import type { TypeTicket } from '../../../moteur/kiosque';
 import { VILLES, Ville } from '../../../moteur/casino';
 
@@ -36,7 +37,7 @@ export interface ActionsHall {
 interface EtatPortefeuille { solde: number; tickets: number; bonus: EtatBonus & { calendrier: JourSerie[] }; toursBonus: number; coupDePouce: boolean }
 interface TourDeRoue { segment: number; clubs: number; tickets: number; jour: number; multiplicateur: number; quotidien: boolean; etat: EtatPortefeuille }
 
-type Onglet = 'club' | 'kiosque' | 'classement';
+type Onglet = 'club' | 'kiosque' | 'classement' | 'amis';
 /** On revient là où on était en quittant une table. */
 let memoire: { onglet: Onglet; jeu: JeuCasino | null; vueK?: string | null; salon?: JeuCasino | null } = { onglet: 'club', jeu: null };
 
@@ -46,6 +47,7 @@ const icone = (j: JeuCasino) => (j === 'poker' ? '<span class="sym">♠</span>' 
 const SVG_ONGLETS: Record<string, string> = {
   club: '<path d="M3 11l9-7 9 7v9H3z"/>',
   kiosque: '<path d="M4 8h16v4a2 2 0 000 4v4H4v-4a2 2 0 000-4z"/>',
+  amis: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-4.5 12.2-4.5 13 0"/><circle cx="17" cy="7" r="2.8"/><path d="M16.5 13.2c2.8-.2 5 1.2 5.5 4.3"/>',
   classement: '<path d="M6 20V10M12 20V4M18 20v-7"/>',
   profil: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 15-5 16 0"/>',
 };
@@ -60,6 +62,7 @@ export class EcranHall {
   private porte: EtatPortefeuille | null = null;
   private arrets: (() => void)[] = [];
   private annonces: Annonce[] = [];
+  private vueAmisOuverte: { recharger: () => void } | null = null;
   private missions: { missions: EtatMission[]; nouvellesDans: number; recu: number } | null = null;
 
   constructor(racine: HTMLElement, private u: Utilisateur, private a: ActionsHall) {
@@ -70,9 +73,9 @@ export class EcranHall {
         <button class="club-moi" data-profil aria-label="Mon profil (${esc(u.pseudo)})">${avatarSVG(u.avatar, 'content', 42, { cadre: u.cadre })}</button>
       </header>
       <main class="club-contenu" data-contenu></main>
-      <nav class="club-onglets">${(['club', 'kiosque', 'classement', 'profil'] as const).map((o) => `
-        <button data-onglet="${o}"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">${SVG_ONGLETS[o]}</svg>
-          ${{ club: 'Le Club', kiosque: 'Kiosque', classement: 'Classement', profil: 'Profil' }[o]}</button>`).join('')}</nav>
+      <nav class="club-onglets">${(['club', 'amis', 'classement', 'profil'] as const).map((o) => `
+        <button data-onglet="${o}"><span class="ico-onglet"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">${SVG_ONGLETS[o]}</svg>${o === 'amis' ? '<i class="badge" data-badge-amis hidden></i>' : ''}</span>
+          ${{ club: 'Le Club', amis: 'Amis', classement: 'Classement', profil: 'Profil' }[o]}</button>`).join('')}</nav>
     </div>`);
     racine.replaceChildren(this.el);
     $('[data-profil]', this.el).onclick = () => a.profil();
@@ -87,6 +90,7 @@ export class EcranHall {
     });
     this.afficher();
     void this.chargerPortefeuille();
+    void this.majBadgeAmis();
   }
 
   /* ------------------------------ Données ------------------------------ */
@@ -105,7 +109,7 @@ export class EcranHall {
 
   private afficher() {
     this.arrets.splice(0).forEach((f) => f());
-    $$('[data-onglet]', this.el).forEach((b) => b.classList.toggle('on', b.dataset.onglet === memoire.onglet));
+    $$('[data-onglet]', this.el).forEach((b) => b.classList.toggle('on', b.dataset.onglet === (memoire.onglet === 'kiosque' ? 'club' : memoire.onglet)));
     const c = $('[data-contenu]', this.el);
     c.scrollTop = 0;
     if (memoire.onglet === 'kiosque') {
@@ -117,6 +121,16 @@ export class EcranHall {
       return vueVitrine(c, ctx);
     }
     if (memoire.onglet === 'classement') return void this.vueClassement(c);
+    if (memoire.onglet === 'amis') {
+      this.vueAmisOuverte = vueAmis(c, {
+        rejoindreCode: (code) => this.a.rejoindreCode(code),
+        majSolde: (solde) => { if (this.porte) this.porte.solde = solde; $('[data-solde]', this.el).textContent = fmt(solde); },
+        badge: (n) => this.badgeAmis(n),
+        nettoyer: (f) => this.arrets.push(f),
+      });
+      this.arrets.push(() => { this.vueAmisOuverte = null; });
+      return;
+    }
     if (memoire.salon) return this.vueSalon(c, memoire.salon);
     if (memoire.jeu) return this.vueSalle(c, memoire.jeu);
     this.vuePlan(c);
@@ -178,6 +192,28 @@ export class EcranHall {
     jouerSon('carte');
     setTimeout(fin, 420);
   }
+
+  /* ------------------------------ Amis ------------------------------ */
+
+  private badgeAmis(n: number) {
+    const b = this.el.querySelector('[data-badge-amis]') as HTMLElement | null;
+    if (!b) return;
+    b.hidden = !n;
+    b.textContent = n ? String(n) : '';
+  }
+
+  private async majBadgeAmis() {
+    try { const d = await api<{ recues: unknown[] }>('/api/amis'); this.badgeAmis(d.recues.length); } catch { /* rien */ }
+  }
+
+  /** Un événement d'ami en direct (demande, acceptation, cadeau) : on rafraîchit. */
+  evenementAmi() {
+    if (this.vueAmisOuverte) this.vueAmisOuverte.recharger();
+    else void this.majBadgeAmis();
+  }
+
+  /** Le solde a changé ailleurs (cadeau reçu…). */
+  rafraichirPortefeuille() { void this.chargerPortefeuille(); }
 
   /* ------------------------------ Annonces des gros gains ------------------------------ */
 

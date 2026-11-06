@@ -1,3 +1,4 @@
+import { ouvrirInvitation } from './amis';
 import { ouvrirApprendre } from './apprendre';
 /**
  * Écran de table : la scène PixiJS + l'interface HTML (actions, hôte, attente, fin de partie).
@@ -218,7 +219,7 @@ export class EcranTable {
       return;
     }
     c.innerHTML = `<h2>${this.canal.enLigne ? 'Invite tes potes !' : 'Prêt à jouer ?'}</h2>
-      ${this.canal.enLigne ? `<div class="doux petit">Code de la table</div><div class="gros-code" data-copier title="Copier">${esc(e.code)}</div>` : ''}
+      ${this.canal.enLigne ? `<div class="doux petit">Code de la table</div><div class="gros-code" data-copier title="Copier">${esc(e.code)}</div><button class="btn btn-petit btn-ciel" data-inviter-amis style="margin-top:6px">👥 Inviter des amis</button>` : ''}
       <p class="doux" style="margin:6px 0 14px">${nb} joueur${nb > 1 ? 's' : ''} sur ${e.reglages.places} · tapis de ${fmt(e.reglages.tapisDepart)}</p>
       ${hote ? `<div class="ligne" style="justify-content:center">
           <button class="btn btn-petit" data-bot ${nb >= e.reglages.places ? 'disabled' : ''}>+ Bot</button>
@@ -226,6 +227,7 @@ export class EcranTable {
           ${nb < 2 ? '<p class="doux petit" style="margin:10px 0 0">Il faut au moins 2 joueurs : attends tes potes ou ajoute un bot.</p>' : ''}`
         : `<p>En attente de l'hôte…</p>`}`;
     const cp = $('[data-copier]', c); if (cp) cp.onclick = () => this.copierCode();
+    const ia = c.querySelector('[data-inviter-amis]') as HTMLElement | null; if (ia) ia.onclick = () => void ouvrirInvitation();
     const bl = $('[data-lancer]', c); if (bl) bl.onclick = () => { debloquerSon(); this.canal.envoyer({ c: 'lancer' }); };
     const bb = $('[data-bot]', c); if (bb) bb.onclick = () => this.canal.envoyer({ c: 'ajouterBot' });
   }
@@ -519,6 +521,7 @@ export class EcranTable {
         <button class="btn" data-m="historique">Historique des mains</button>
         <button class="btn" data-m="reglages">Mes réglages</button>
         <button class="btn" data-m="regles">Comment jouer ?</button>
+        ${this.canal.enLigne ? `<button class="btn" data-m="inviter">👥 Inviter des amis</button>` : ''}
         ${this.canal.enLigne ? `<button class="btn" data-m="code">Code de la table : <b style="letter-spacing:2px">${esc(e.code)}</b></button>` : ''}
         ${moi && !moi.absent && e.statut === 'en_jeu' ? '<button class="btn" data-m="absent">M\'absenter</button>' : ''}
         ${moi?.absent ? '<button class="btn" data-m="retour">Je reviens</button>' : ''}
@@ -530,6 +533,7 @@ export class EcranTable {
       switch (b.dataset.m) {
         case 'hote': return this.panneauHote();
         case 'code': return this.copierCode();
+        case 'inviter': return void ouvrirInvitation();
         case 'regles': return ouvrirApprendre('poker');
         case 'reglages': return ouvrirReglagesPerso((oui) => this.canal.envoyer({ c: 'toujoursMontrer', oui }));
         case 'historique': return ouvrirHistorique({

@@ -1168,3 +1168,34 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .actions-salon { display: flex; flex-direction: column; gap: 10px; }
 .actions-salon .deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .actions-salon .btn { white-space: normal; }
+
+/* ======================= Les amis ======================= */
+.ico-onglet { position: relative; display: inline-grid; }
+.badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #E5484D; color: #fff; border: 2px solid var(--nuit2); font: 800 11px/14px Nunito, sans-serif; font-style: normal; text-align: center; }
+.badge[hidden] { display: none; }
+.ajout-ami { display: flex; gap: 8px; margin-bottom: 14px; }
+.ajout-ami input { flex: 1; min-width: 0; background: var(--nuit2); color: var(--creme); border: 3px solid var(--trait); border-radius: 14px; padding: 10px 12px; font: 700 15px Nunito, sans-serif; }
+.ajout-ami .btn { flex: none; }
+.ami { display: flex; align-items: center; gap: 10px; background: var(--nuit2); border: 3px solid var(--trait); border-radius: 16px; padding: 8px 10px; margin-bottom: 8px; box-shadow: 0 4px 0 var(--trait); }
+.ami .av { position: relative; flex: none; display: grid; }
+.ami .av i { position: absolute; right: 0; bottom: 0; width: 13px; height: 13px; border-radius: 50%; background: #6E6489; border: 2.5px solid var(--nuit2); }
+.ami.en-ligne .av i { background: #5BE38B; box-shadow: 0 0 6px #5BE38B; }
+.ami > svg { flex: none; }
+.ami .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ami .txt b { font-family: Fredoka; font-weight: 600; font-size: 16.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ami .txt small { font-size: 12.5px; font-weight: 800; color: var(--doux); line-height: 1.3; }
+.ami.en-ligne .txt small { color: #8EE07A; }
+.ami .btn-petit { flex: none; padding-left: 10px; padding-right: 10px; }
+.ami.demande { background: linear-gradient(135deg, #3E3270, #2F2450); border-color: var(--or); }
+.ami.attente { opacity: .75; box-shadow: none; }
+.montants-cadeau { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.carte-invitation { position: fixed; z-index: 75; left: 50%; bottom: calc(86px + var(--bas)); transform: translateX(-50%); width: min(94vw, 460px); box-sizing: border-box; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--creme); color: var(--trait); border: 3px solid var(--trait); border-radius: 20px; padding: 10px 12px; box-shadow: 0 7px 0 rgba(0,0,0,.35); animation: monte .4s cubic-bezier(.3,1.5,.5,1); transition: opacity .4s, transform .4s; }
+.carte-invitation.part { opacity: 0; transform: translate(-50%, 20px); }
+.carte-invitation > svg { flex: none; }
+.carte-invitation .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.carte-invitation small { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; opacity: .7; }
+.carte-invitation b { font-family: Fredoka; font-weight: 600; font-size: 16px; }
+.carte-invitation .txt span { font-size: 13px; font-weight: 700; }
+.carte-invitation .boutons { display: flex; gap: 8px; width: 100%; }
+.carte-invitation .boutons .btn { flex: 1; }
+.carte-invitation .btn-fantome { color: var(--trait); border-color: rgba(42,30,63,.35); }

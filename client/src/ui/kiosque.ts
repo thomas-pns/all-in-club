@@ -39,7 +39,7 @@ const TICKETS_VITRINE: { type: TypeTicket; nom: string; prix: number; accroche: 
 export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   const offerts = ctx.porte()?.tickets ?? 0;
   c.innerHTML = `<div class="kiosque-vue">
-    <h1 style="font-size:26px;margin-bottom:10px">Le Kiosque</h1>
+    <div class="ligne" style="gap:10px;margin-bottom:10px"><button class="btn btn-rond btn-fantome" data-retour-rue aria-label="Retour à la rue">←</button><h1 style="font-size:26px">Le Kiosque</h1></div>
     <div class="auvent-large"></div>
     ${offerts ? `<button class="annonce bonus" data-offert><span class="mini-ticket"><i></i><i class="g"></i><i></i><i class="g"></i><i></i><i class="g"></i></span><span><b>${offerts} ticket${offerts > 1 ? 's' : ''} offert${offerts > 1 ? 's' : ''}</b><small>Un Banco gratuit à gratter, touche pour le prendre</small></span></button>` : ''}
     <h3 class="titre-rubrique">Tickets à gratter</h3>
@@ -55,6 +55,7 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   $$('[data-ticket]', c).forEach((b) => b.onclick = () => ctx.aller(`ticket:${b.dataset.ticket}`));
   $$('[data-vue]', c).forEach((b) => b.onclick = () => ctx.aller(b.dataset.vue!));
   const o = $('[data-offert]', c); if (o) o.onclick = () => ctx.aller('ticket:banco:offert');
+  $('[data-retour-rue]', c).onclick = () => (document.querySelector('[data-onglet="club"]') as HTMLElement | null)?.click();
   // Comptes à rebours des tirages (calés sur l'heure du serveur)
   let decalage = 0, cagnotte: number | null = null;
   void api<{ maintenant: number; cagnotte: number }>('/api/kiosque/loto').then((r) => {

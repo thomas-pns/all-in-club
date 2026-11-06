@@ -17,6 +17,7 @@ import { Ville, ville as trouverVille, caveDe, reglagesCasino, COMMANDES_HOTE_CA
 import type { Portefeuilles, EtatPortefeuille } from './portefeuille.js';
 import type { Activites, Annonce, MissionFaite } from './activites.js';
 import { fmtClubs } from './kiosque.js';
+import type { MessageAmi, Presence } from './amis.js';
 import { Utilisateur } from './comptes.js';
 import { Donnees, idUtilisateur } from './donnees.js';
 import { Notifications } from './notifications.js';
@@ -47,6 +48,7 @@ export type MessageServeur =
   | { type: 'succes'; succes: Omit<DefinitionSucces, 'test'>[] }
   | { type: 'erreur'; texte: string }
   | { type: 'annonce'; annonce: Annonce }
+  | MessageAmi
   | ({ type: 'mission'; etat: EtatPortefeuille | null } & MissionFaite)
   | { type: 'pong' };
 
@@ -261,6 +263,27 @@ export class Hall {
   private envoyer(c: Client, m: MessageServeur) {
     if (c.ws.readyState === 1) c.ws.send(JSON.stringify(m));
   }
+
+  /** Où en est un joueur : connecté ? à quelle table ? (pour ses amis) */
+  presence(u: number): Presence {
+    const id = `u${u}`;
+    const enLigne = this.parMembre.has(id);
+    const sid = this.ouEst.get(id);
+    const s = sid ? this.salles.get(sid) : undefined;
+    if (!enLigne || !s) return { enLigne, table: null };
+    const r = s.resume() as { nom: string; joueurs: number; places: number; statut: string };
+    const lieu = this.casino.get(s.id);
+    return {
+      enLigne,
+      table: {
+        code: s.code, nom: lieu ? `Casino de ${lieu.ville.nom}` : r.nom, jeu: jeuDe(s), ville: lieu?.ville.nom ?? null,
+        joueurs: r.joueurs, places: r.places, rejoignable: r.statut !== 'terminee' && r.joueurs < r.places,
+      },
+    };
+  }
+
+  /** Un message en direct pour un joueur connecté (amis). */
+  notifier(u: number, m: MessageServeur) { this.envoyerMembre(`u${u}`, m); }
 
   private envoyerMembre(id: string, m: MessageServeur) {
     const c = this.parMembre.get(id);

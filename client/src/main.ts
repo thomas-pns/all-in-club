@@ -22,6 +22,7 @@ import { SalleBJ, ReglagesBJ, MessageBJ } from '../../moteur/blackjack/salleBJ';
 import { EcranRoulette, CanalRoulette } from './ui/roulette';
 import { SalleRoulette, ReglagesRoulette, MessageRoulette } from '../../moteur/roulette/salleRoulette';
 import { EcranHall } from './ui/club';
+import { carteInvitation } from './ui/amis';
 import type { JeuCasino } from './ui/ecrans';
 import { ecranConnexion, ecranReinitialiser, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces, afficherBanniere } from './ui/ecrans';
 import { toast, html, esc, suspense, avecPieces } from './ui/commun';
@@ -117,6 +118,18 @@ function surMessage(m: MessageServeur) {
       // Pas la peine de se l'annoncer à soi-même : on vient de le voir
       if (a.pseudo.toLowerCase() === utilisateur?.pseudo.toLowerCase()) { hall?.nouvelleAnnonce(a); break; }
       afficherBanniere({ icone: '🎉', surtitre: 'Gros gain au Club', titre: esc(a.pseudo), texte: avecPieces(esc(a.texte)), genre: 'gain', son: null, avant: () => hall?.nouvelleAnnonce(a) });
+      break;
+    }
+    case 'amis': {
+      const d = m.de;
+      if (m.evenement === 'invitation') {
+        carteInvitation(m, (code) => { if (table) fermerTable(); reseau?.envoyer({ type: 'rejoindre', code }); });
+        break;
+      }
+      hall?.evenementAmi();
+      if (m.evenement === 'demande') afficherBanniere({ icone: '👋', surtitre: "Demande d'ami", titre: esc(d.pseudo), texte: "veut être ton ami · réponds dans l'onglet Amis", genre: 'gain', son: 'gagne' });
+      else if (m.evenement === 'accepte') afficherBanniere({ icone: '🤝', surtitre: 'Nouvel ami', titre: esc(d.pseudo), texte: 'a accepté ta demande', genre: 'gain', son: 'gagne' });
+      else if (m.evenement === 'cadeau') afficherBanniere({ icone: '🎁', surtitre: 'Cadeau !', titre: `${esc(d.pseudo)} t'offre ${(m.montant ?? 0).toLocaleString('fr-FR')} <i class="pc"></i>`, genre: 'gain', son: 'grosGain', avant: () => hall?.rafraichirPortefeuille() });
       break;
     }
     case 'mission': {
