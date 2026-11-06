@@ -1,3 +1,4 @@
+import { illustrationVille } from '../art/villes';
 import { ouvrirApprendre } from './apprendre';
 /**
  * Le Club : l'accueil une fois connecté.
@@ -346,10 +347,13 @@ export class EcranHall {
     zone.innerHTML = VILLES.map((v) => {
       const cave = v[jeu].cave, manque = cave - solde, n = this.villes[`${jeu}:${v.id}`] ?? 0;
       return `<div class="ville ${manque > 0 ? 'fermee' : ''}" style="--c:${v.couleur}">
-        <span class="skyline ville-${v.id}" aria-hidden="true"></span>
-        <span class="infos-ville"><b>${v.nom}</b><small>${enjeux(v)} · cave ${clubs(cave)}</small>
-          <small class="doux">${manque > 0 ? `Il te manque ${clubs(manque)}` : n ? `${n} joueur${n > 1 ? 's' : ''} à table` : esc(v.accroche)}</small></span>
-        <button class="btn btn-petit ${manque > 0 ? '' : 'btn-or'}" data-ville="${v.id}" ${manque > 0 ? 'disabled' : ''}>S'asseoir</button></div>`;
+        <div class="carte-postale">${illustrationVille(v.id)}
+          <span class="titre-ville">${v.nom}</span>
+          ${n ? `<span class="monde-ville"><i></i>${n} à table</span>` : ''}
+          ${manque > 0 ? `<span class="cadenas-ville">🔒 Il te manque ${clubs(manque)}</span>` : ''}
+        </div>
+        <div class="bas-ville"><span class="enjeux-ville"><b>${enjeux(v)}</b><small><span class="nowrap">Cave ${clubs(cave)}</span> · ${esc(v.accroche)}</small></span>
+          <button class="btn btn-petit ${manque > 0 ? '' : 'btn-or'}" data-ville="${v.id}" ${manque > 0 ? 'disabled' : ''}>S'asseoir</button></div></div>`;
     }).join('');
     $$('[data-ville]', zone).forEach((b) => b.onclick = () => { jouerSon('jetons'); this.a.casino(jeu, b.dataset.ville!); });
   }
