@@ -20,6 +20,8 @@ export interface ContexteKiosque {
   celebrer(depuis: HTMLElement, pieces: number): void;
   /** Rappelé à chaque changement de vue pour arrêter les minuteries. */
   nettoyer(f: () => void): void;
+  /** Revenir à la rue (avec l'animation de retour). */
+  retourRue(): void;
 }
 
 const clubs = (n: number) => `${fmt(n)}&nbsp;<i class="pc"></i>`;
@@ -47,15 +49,16 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
       ${t.type === 'trefle' ? '<span class="ruban">+ d\'1 chance sur 4</span>' : t.type === 'millionnaire' ? '<span class="ruban">Gros lot</span>' : ''}
       <span class="tk-titre">${t.nom}</span>
       <span class="tk-illu">${miniTicket(t.type)}</span>
-      <span class="tk-max"><small>jusqu'à</small><b>${fmtCourt(t.max)}</b></span>
+      <span class="tk-max"><i class="eclat e1">✦</i><small>jusqu'à</small><b>${fmtCourt(t.max)}</b><i class="eclat e2">✦</i></span>
       <span class="tk-prix">${clubs(t.prix)}</span>
       <i class="reflet"></i>
     </button>`).join('')}</div>
     <h3 class="titre-rubrique">Tirages en direct</h3>
     <button class="tirage-carte keno" data-vue="keno">
-      <span class="tambour">${[7, 18, 33, 41, 56, 70, 12].map((n, i) => `<i style="--i:${i}">${n}</i>`).join('')}</span>
+      <span class="tableau-keno">${Array.from({ length: 20 }, (_, i) => `<i style="--i:${(i * 7) % 20}">${[3, 9, 14, 22, 27, 31, 35, 40, 44, 48, 51, 55, 58, 61, 63, 66, 2, 18, 29, 70][i]}</i>`).join('')}</span>
       <span class="txt"><b class="logo-keno">KENO <em>du Club</em></b><span>Coche 1 à 10 numéros sur 70</span><span class="prochain">Prochain tirage dans <b data-chrono-keno>…</b></span></span></button>
     <button class="tirage-carte loto" data-vue="loto">
+      <span class="tambour">${[5, 12, 19, 23, 8].map((n, i) => `<i style="--i:${i}">${n}</i>`).join('')}<i class="etoile-boule" style="--i:5">★</i></span>
       <span class="txt"><b class="logo-loto">LOTO <em>FLASH</em> <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="#FFC23D" stroke="#2A1E3F" stroke-width="1.8" stroke-linejoin="round"/></svg></b>
         <span class="cagnotte-carte"><small>Cagnotte</small><b data-cagnotte>…</b></span>
         <span class="prochain">5 numéros + 1 étoile · tirage dans <b data-chrono-loto>…</b></span></span></button>
@@ -64,7 +67,7 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   $$('[data-ticket]', c).forEach((b) => b.onclick = () => ctx.aller(`ticket:${b.dataset.ticket}`));
   $$('[data-vue]', c).forEach((b) => b.onclick = () => ctx.aller(b.dataset.vue!));
   const o = $('[data-offert]', c); if (o) o.onclick = () => ctx.aller('ticket:banco:offert');
-  $('[data-retour-rue]', c).onclick = () => (document.querySelector('[data-onglet="club"]') as HTMLElement | null)?.click();
+  $('[data-retour-rue]', c).onclick = () => ctx.retourRue();
   // Comptes à rebours des tirages (calés sur l'heure du serveur)
   let decalage = 0, cagnotte: number | null = null;
   void api<{ maintenant: number; cagnotte: number }>('/api/kiosque/loto').then((r) => {

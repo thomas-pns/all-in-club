@@ -921,8 +921,12 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .scene-rue { display: block; height: clamp(220px, calc(100vw * .62), 250px); width: auto; aspect-ratio: 1100 / 340; }
 @media (min-width: 760px) { .scene-rue { height: clamp(300px, 42vh, 400px); } }
 @media (min-width: 760px) { .rue-cadre { margin: 0 0 14px; } .rue-defile { border: 3px solid var(--trait); border-radius: 24px; box-shadow: 0 6px 0 var(--trait); } }
-.indice-defile { position: absolute; right: 10px; top: 22%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; background: rgba(42,30,63,.85); color: var(--creme); border: 2.5px solid var(--creme); font-size: 26px; font-weight: 800; line-height: 1; cursor: pointer; animation: pousse 1.6s ease-in-out infinite; transition: opacity .3s; }
-.indice-defile.cache { opacity: 0; pointer-events: none; }
+.rue-defile { cursor: grab; }
+.rue-defile.glisse { cursor: grabbing; }
+.rue-defile.glisse * { pointer-events: none; }
+.scene-rue { user-select: none; -webkit-user-select: none; }
+.scene-rue :focus:not(:focus-visible) { outline: none; }
+.scene-rue .lieu, .scene-rue .porte-casino { -webkit-tap-highlight-color: transparent; }
 @keyframes pousse { 0%, 100% { transform: translate(0, -50%); } 50% { transform: translate(5px, -50%); } }
 .scene-rue .lieu { cursor: pointer; }
 .scene-rue .lieu:focus-visible, .scene-rue .porte-casino:focus-visible { outline: 3px solid var(--or); }
@@ -965,7 +969,7 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .scene-rue .bulle-roue { opacity: 0; transform-box: fill-box; transform-origin: 20% 100%; transition: opacity .3s; }
 .scene-rue.roue-dispo .bulle-roue { opacity: 1; animation: appel-bulle 1.8s ease-in-out infinite; }
 @keyframes appel-bulle { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.08) rotate(-2deg); } }
-@media (prefers-reduced-motion: reduce) { .scene-rue *, .indice-defile { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .scene-rue * { animation: none !important; } }
 
 /* Bandeau des gros gains */
 .bandeau-annonces { overflow: hidden; background: var(--or); color: var(--trait); border: 3px solid var(--trait); border-radius: 14px; box-shadow: 0 4px 0 var(--trait); margin-bottom: 12px; padding: 7px 0; font-weight: 800; font-size: 14px; white-space: nowrap; }
@@ -1118,6 +1122,8 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .rue-cadre.zoom-entree { animation: zoom-entree .42s cubic-bezier(.5,0,.75,0) forwards; z-index: 5; }
 .club-plan-zone.on-entre > :not(.rue-cadre) { opacity: 0; transition: opacity .25s; }
 @keyframes zoom-entree { to { transform: scale(2.6); opacity: 0; filter: blur(2px); } }
+.rue-cadre.zoom-sortie { animation: zoom-sortie .5s cubic-bezier(.2,.9,.3,1); }
+@keyframes zoom-sortie { from { transform: scale(2.6); opacity: 0; filter: blur(2px); } }
 .arrivee { animation: arrivee .45s cubic-bezier(.2,.9,.3,1.1); }
 @keyframes arrivee { from { transform: scale(.94) translateY(14px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .rue-cadre.zoom-entree, .arrivee { animation: none; } }
@@ -1211,9 +1217,13 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .tk.t-millionnaire .tk-titre { color: #FFE27A; }
 .tk-illu { width: 100%; background: rgba(255,255,255,.14); border-radius: 10px; padding: 5px; }
 .tk-illu svg { display: block; width: 100%; height: auto; }
-.tk-max { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 104px; height: 58px; margin-top: -2px; background: #FFE27A; color: var(--trait);
-  clip-path: polygon(50% 0, 60% 14%, 76% 4%, 78% 22%, 96% 20%, 88% 38%, 100% 50%, 88% 62%, 96% 80%, 78% 78%, 76% 96%, 60% 86%, 50% 100%, 40% 86%, 24% 96%, 22% 78%, 4% 80%, 12% 62%, 0 50%, 12% 38%, 4% 20%, 22% 22%, 24% 4%, 40% 14%);
-  animation: palpite 2.4s ease-in-out infinite; }
+.tk-max { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 96px; padding: 4px 14px 5px; margin-top: 2px; border-radius: 12px; color: var(--trait); overflow: hidden;
+  background: linear-gradient(180deg, #FFF1B0, #FFC23D 55%, #F0A21A); border: 2.5px solid var(--trait); box-shadow: 0 3px 0 var(--trait), inset 0 2px 0 rgba(255,255,255,.6); }
+.tk-max::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.75) 50%, transparent 65%); transform: translateX(-120%); animation: lustre 3.2s ease-in-out infinite; }
+.tk-max .eclat { position: absolute; font-style: normal; color: #fff; font-size: 11px; text-shadow: 0 0 4px #fff; animation: scintille 1.8s ease-in-out infinite; }
+.tk-max .e1 { left: 4px; top: 2px; } .tk-max .e2 { right: 4px; bottom: 3px; animation-delay: -.9s; }
+@keyframes lustre { 60%, 100% { transform: translateX(120%); } }
+@keyframes scintille { 0%, 100% { opacity: 0; transform: scale(.4) rotate(0); } 50% { opacity: 1; transform: scale(1.1) rotate(90deg); } }
 .tk-max small { font-size: 9.5px; font-weight: 800; text-transform: uppercase; line-height: 1; }
 .tk-max b { font-family: Fredoka; font-weight: 700; font-size: 14px; line-height: 1.05; white-space: nowrap; }
 @keyframes palpite { 0%, 100% { transform: scale(1) rotate(-4deg); } 50% { transform: scale(1.07) rotate(3deg); } }
@@ -1225,7 +1235,7 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .tk.t-coffre { background: radial-gradient(ellipse at 50% 30%, #F0524F, #B81F2E); }
 .tk.t-trefle { background: repeating-linear-gradient(120deg, #F59A2A 0 6px, #F2A73E 6px 12px); }
 .tk.t-millionnaire { background: radial-gradient(ellipse at 50% 0%, #7B4FC4, #2A1650); }
-@media (prefers-reduced-motion: reduce) { .tk, .tk-max, .tk .reflet { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .tk, .tk-max::after, .tk-max .eclat, .tk .reflet { animation: none; } }
 
 /* Les cartes des tirages */
 .tirage-carte.keno { background: linear-gradient(135deg, #46C2F0, #2E8FD0); color: var(--trait); align-items: center; }
@@ -1286,3 +1296,15 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .boules i.etoile::before, .ma-grille .nums i.etoile::before { content: '★'; position: absolute; top: -9px; right: -5px; font-size: 13px; color: #FFC23D; text-shadow: 0 0 2px var(--trait); }
 .ma-grille .nums i.etoile.bon { background: var(--or); }
 .ma-grille b { white-space: nowrap; }
+
+/* Keno : tableau lumineux dont les numéros s'allument tour à tour */
+.tableau-keno { flex: none; display: grid; grid-template-columns: repeat(5, 17px); gap: 3px; padding: 6px; background: var(--trait); border-radius: 12px; border: 3px solid var(--trait); }
+.tableau-keno i { width: 17px; height: 17px; border-radius: 4px; background: #3A2C55; color: #8D7FB0; font-style: normal; font-size: 8.5px; font-weight: 800; display: grid; place-items: center; animation: allume 4s steps(1) infinite; animation-delay: calc(var(--i) * 0.2s); }
+@keyframes allume { 0%, 45% { background: #3A2C55; color: #8D7FB0; box-shadow: none; } 50%, 90% { background: var(--or); color: var(--trait); box-shadow: 0 0 6px var(--or); } }
+.tambour .etoile-boule { background: #FF5A7A !important; color: #fff; font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .tableau-keno i { animation: none; } }
+/* PC : zone de jeu plus large */
+@media (min-width: 1024px) {
+  .club-entete, .club-contenu { max-width: 1100px; }
+  .club-onglets { max-width: 1100px !important; }
+}

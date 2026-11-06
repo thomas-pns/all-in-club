@@ -63,6 +63,11 @@ export class EcranHall {
   private arrets: (() => void)[] = [];
   private annonces: Annonce[] = [];
   private vueAmisOuverte: { recharger: () => void } | null = null;
+  /** Bâtiment d'où l'on revient (pour l'animation de retour). */
+  private retourDe: string | null = null;
+
+  /** Revenir à la rue depuis la page d'un bâtiment, avec le dézoom. */
+  private retourRue(lieu: string) { this.retourDe = lieu; memoire = { onglet: 'club', jeu: null }; jouerSon('carte'); this.afficher(); }
   private missions: { missions: EtatMission[]; nouvellesDans: number; recu: number } | null = null;
 
   constructor(racine: HTMLElement, private u: Utilisateur, private a: ActionsHall) {
@@ -141,7 +146,7 @@ export class EcranHall {
     c.innerHTML = `<div class="club-plan-zone">
       <div data-annonces class="annonces"></div>
       <div class="bandeau-annonces" data-bandeau hidden><span class="defile" data-defile></span></div>
-      <div class="rue-cadre"><div class="rue-defile" data-rue>${sceneRue(momentParis())}</div><button class="indice-defile" data-indice aria-label="Voir la suite de la rue">›</button></div>
+      <div class="rue-cadre"><div class="rue-defile" data-rue>${sceneRue(momentParis())}</div></div>
       <div class="missions-carte" data-missions><span class="doux petit">Missions du jour…</span></div>
       <p class="doux petit plan-legende" data-enligne></p>
     </div>`;
@@ -162,12 +167,39 @@ export class EcranHall {
       });
     });
     rue.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && (e.target as Element).closest('[data-lieu],[data-jeu]')) { e.preventDefault(); (e.target as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
-    // Une flèche invite à faire défiler la rue ; elle disparaît au bout du chemin
-    const indice = $('[data-indice]', c);
-    const majIndice = () => indice.classList.toggle('cache', rue.scrollLeft + rue.clientWidth >= rue.scrollWidth - 8);
-    rue.addEventListener('scroll', majIndice, { passive: true });
-    indice.onclick = () => rue.scrollBy({ left: rue.clientWidth * 0.8, behavior: 'smooth' });
-    requestAnimationFrame(majIndice);
+    // Faire glisser la rue à la souris (au doigt, c'est natif), et la molette la fait défiler aussi
+    let glisse: { x: number; depart: number; bouge: boolean } | null = null;
+    rue.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' && e.button === 0) glisse = { x: e.clientX, depart: rue.scrollLeft, bouge: false }; });
+    addEventListener('pointermove', (e) => {
+      if (!glisse) return;
+      const dx = e.clientX - glisse.x;
+      if (Math.abs(dx) > 6) { glisse.bouge = true; rue.classList.add('glisse'); }
+      if (glisse.bouge) rue.scrollLeft = glisse.depart - dx;
+    });
+    const lacher = () => { setTimeout(() => { glisse = null; rue.classList.remove('glisse'); }, 0); };
+    addEventListener('pointerup', lacher);
+    this.arrets.push(() => removeEventListener('pointerup', lacher));
+    // Un glissé ne doit pas ouvrir un bâtiment
+    rue.addEventListener('click', (e) => { if (glisse?.bouge) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+    rue.addEventListener('wheel', (e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && rue.scrollWidth > rue.clientWidth) { const avant = rue.scrollLeft; rue.scrollLeft += e.deltaY; if (rue.scrollLeft !== avant) e.preventDefault(); } }, { passive: false });
+    // Invitation à explorer : la rue glisse un peu vers la droite puis revient (une fois par session)
+    if (!sessionStorage.getItem('aic-rue-vue') && rue.scrollWidth > rue.clientWidth + 40 && !this.retourDe) {
+      sessionStorage.setItem('aic-rue-vue', '1');
+      setTimeout(() => { rue.scrollTo({ left: 140, behavior: 'smooth' }); setTimeout(() => rue.scrollTo({ left: 0, behavior: 'smooth' }), 900); }, 1300);
+    }
+    // Retour d'un bâtiment : la rue « dézoome » depuis lui
+    if (this.retourDe) {
+      const b = rue.querySelector(`[data-lieu="${this.retourDe}"]`);
+      this.retourDe = null;
+      const cadre = c.querySelector('.rue-cadre') as HTMLElement;
+      if (b && cadre && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        if (b.getBoundingClientRect().right > rue.getBoundingClientRect().right) rue.scrollLeft = 9999;
+        const r = cadre.getBoundingClientRect(), bb = b.getBoundingClientRect();
+        cadre.style.transformOrigin = `${bb.left + bb.width / 2 - r.left}px ${bb.top + bb.height * 0.7 - r.top}px`;
+        cadre.classList.add('zoom-sortie');
+        setTimeout(() => cadre.classList.remove('zoom-sortie'), 520);
+      }
+    }
     // Le ciel change avec l'heure
     const moment = momentParis();
     const minuterie = setInterval(() => { if (momentParis() !== moment && memoire.onglet === 'club' && !memoire.jeu && !memoire.salon) this.afficher(); }, 60_000);
@@ -452,7 +484,7 @@ export class EcranHall {
       <div class="villes" data-villes></div>
       <button class="vers-salon" data-vers-salon><span class="neon-mini">Entre potes</span><span><b>Envie de jouer sans miser tes Clubs ?</b><small>Au salon Entre potes : jetons offerts, tes règles, une table rien que pour tes potes.</small></span><i>›</i></button>
     </div>`;
-    $('[data-retour]', c).onclick = () => { memoire = { onglet: 'club', jeu: null }; this.afficher(); };
+    $('[data-retour]', c).onclick = () => this.retourRue('casino');
     $$('[data-seg]', c).forEach((b) => b.onclick = () => { jouerSon('clic'); memoire.jeu = b.dataset.seg as JeuCasino; this.afficher(); });
     $('[data-apprendre]', c).onclick = () => ouvrirApprendre(jeu, (j) => this.a.solo(j));
     $('[data-vers-salon]', c).onclick = () => { jouerSon('clic'); memoire = { onglet: 'club', jeu: null, salon: jeu }; this.afficher(); this.el.querySelector('[data-contenu] > *')?.classList.add('arrivee'); };
@@ -476,7 +508,7 @@ export class EcranHall {
       <div class="ligne" style="justify-content:space-between;margin:18px 0 10px"><h2 style="font-size:20px">Tables ouvertes</h2><span class="doux petit" data-enligne></span></div>
       <div data-tables></div>
     </div>`;
-    $('[data-retour]', c).onclick = () => { memoire = { onglet: 'club', jeu: null }; this.afficher(); };
+    $('[data-retour]', c).onclick = () => this.retourRue('salon');
     $$('[data-seg]', c).forEach((b) => b.onclick = () => { jouerSon('clic'); memoire.salon = b.dataset.seg as JeuCasino; this.afficher(); });
     $('[data-creer]', c).onclick = () => this.a.creer(jeu);
     $('[data-solo]', c).onclick = () => this.a.solo(jeu);
@@ -507,6 +539,7 @@ export class EcranHall {
       aller: (v) => { memoire = { onglet: 'kiosque', jeu: null, vueK: v === 'kiosque' ? null : v }; this.afficher(); },
       celebrer: (el, n) => this.pluieDePieces(el, n),
       nettoyer: (f) => this.arrets.push(f),
+      retourRue: () => this.retourRue('kiosque'),
     };
   }
 
