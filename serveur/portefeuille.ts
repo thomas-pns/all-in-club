@@ -1,21 +1,26 @@
 /**
- * Portefeuilles du Club : le solde en Clubs ♣ de chaque compte, la série du bonus du jour,
+ * Portefeuilles du Club : le solde en Clubs ♣ de chaque compte, la série du bonus du jour (la Grande Roue),
  * le coup de pouce quand on est à sec, et l'historique des mouvements.
  * Argent fictif : il ne s'achète pas et ne se retire jamais.
  */
+import { randomInt } from 'node:crypto';
 import { Base } from './base.js';
-import { CALENDRIER, COUP_DE_POUCE, EtatBonus, Recompense, SEUIL_COUP_DE_POUCE, SOLDE_DEPART, etatBonus, jourParis } from '../moteur/bonus.js';
+import { CALENDRIER, COUP_DE_POUCE, EtatBonus, JourSerie, ROUE, SEUIL_COUP_DE_POUCE, SOLDE_DEPART, etatBonus, gainRoue, jourParis, tirerRoue } from '../moteur/bonus.js';
 
 export interface EtatPortefeuille {
   solde: number;
   tickets: number;
-  bonus: EtatBonus & { calendrier: Recompense[] };
+  bonus: EtatBonus & { calendrier: JourSerie[] };
+  /** Tours de Grande Roue gagnés en plus (missions du jour). */
+  toursBonus: number;
   coupDePouce: boolean;
 }
 
+export interface TourDeRoue { segment: number; clubs: number; tickets: number; jour: number; multiplicateur: number; quotidien: boolean; etat: EtatPortefeuille }
+
 export class ErreurPortefeuille extends Error {}
 
-interface Ligne { solde: number; tickets: number; serie: number; dernier_bonus: string | null; dernier_coup: string | null }
+interface Ligne { solde: number; tickets: number; serie: number; dernier_bonus: string | null; dernier_coup: string | null; tours_bonus: number }
 
 export function migrerPortefeuilles(db: Base) {
   db.exec(`
@@ -37,17 +42,19 @@ export function migrerPortefeuilles(db: Base) {
     );
     CREATE INDEX IF NOT EXISTS mouvements_utilisateur ON mouvements(utilisateur, id);
   `);
+  const colonnes = (db.prepare('PRAGMA table_info(portefeuilles)').all() as { name: string }[]).map((c) => c.name);
+  if (!colonnes.includes('tours_bonus')) db.exec('ALTER TABLE portefeuilles ADD COLUMN tours_bonus INTEGER NOT NULL DEFAULT 0');
 }
 
 export class Portefeuilles {
-  constructor(private db: Base, private horloge: () => number = Date.now) { migrerPortefeuilles(db); }
+  constructor(private db: Base, private horloge: () => number = Date.now, private hasard: (n: number) => number = (n) => randomInt(n)) { migrerPortefeuilles(db); }
 
   private ligne(u: number): Ligne {
-    let l = this.db.prepare('SELECT solde, tickets, serie, dernier_bonus, dernier_coup FROM portefeuilles WHERE utilisateur = ?').get(u) as Ligne | undefined;
+    let l = this.db.prepare('SELECT solde, tickets, serie, dernier_bonus, dernier_coup, tours_bonus FROM portefeuilles WHERE utilisateur = ?').get(u) as Ligne | undefined;
     if (!l) {
       this.db.prepare('INSERT INTO portefeuilles (utilisateur, solde) VALUES (?, ?)').run(u, SOLDE_DEPART);
       this.db.prepare('INSERT INTO mouvements (utilisateur, date, montant, motif, solde) VALUES (?, ?, ?, ?, ?)').run(u, this.horloge(), SOLDE_DEPART, 'Bienvenue au Club', SOLDE_DEPART);
-      l = { solde: SOLDE_DEPART, tickets: 0, serie: 0, dernier_bonus: null, dernier_coup: null };
+      l = { solde: SOLDE_DEPART, tickets: 0, serie: 0, dernier_bonus: null, dernier_coup: null, tours_bonus: 0 };
     }
     return l;
   }
@@ -58,6 +65,7 @@ export class Portefeuilles {
     return {
       solde: l.solde, tickets: l.tickets,
       bonus: { ...etatBonus(l.serie, l.dernier_bonus, auj), calendrier: CALENDRIER },
+      toursBonus: l.tours_bonus,
       coupDePouce: l.solde < SEUIL_COUP_DE_POUCE && l.dernier_coup !== auj,
     };
   }
@@ -72,14 +80,36 @@ export class Portefeuilles {
     return solde;
   }
 
-  encaisserBonus(u: number): { recompense: Recompense; jour: number; etat: EtatPortefeuille } {
+  /**
+   * Un tour de Grande Roue : d'abord le tour gratuit du jour (qui fait avancer la série),
+   * puis les tours gagnés avec les missions. Le jour de la série multiplie le gain.
+   */
+  tournerRoue(u: number): TourDeRoue {
     const e = this.etat(u);
-    if (!e.bonus.dispo) throw new ErreurPortefeuille('Bonus déjà récupéré aujourd\'hui');
-    const r = CALENDRIER[e.bonus.jour - 1];
     const auj = jourParis(this.horloge());
-    this.db.prepare('UPDATE portefeuilles SET serie = ?, dernier_bonus = ?, tickets = tickets + ? WHERE utilisateur = ?').run(e.bonus.jour, auj, r.tickets, u);
-    this.crediter(u, r.clubs, `Bonus du jour ${e.bonus.jour}`);
-    return { recompense: r, jour: e.bonus.jour, etat: this.etat(u) };
+    let jour: number, ticketsSerie = 0;
+    const quotidien = e.bonus.dispo;
+    if (quotidien) {
+      jour = e.bonus.jour;
+      ticketsSerie = CALENDRIER[jour - 1].tickets;
+      this.db.prepare('UPDATE portefeuilles SET serie = ?, dernier_bonus = ? WHERE utilisateur = ?').run(jour, auj, u);
+    } else if (e.toursBonus > 0) {
+      jour = e.bonus.jour;
+      this.db.prepare('UPDATE portefeuilles SET tours_bonus = tours_bonus - 1 WHERE utilisateur = ?').run(u);
+    } else throw new ErreurPortefeuille('Plus de tour de roue aujourd\'hui : reviens demain !');
+    const multiplicateur = CALENDRIER[jour - 1].multiplicateur;
+    const segment = tirerRoue(this.hasard);
+    const g = gainRoue(segment, multiplicateur);
+    const tickets = g.tickets + ticketsSerie;
+    if (tickets) this.db.prepare('UPDATE portefeuilles SET tickets = tickets + ? WHERE utilisateur = ?').run(tickets, u);
+    if (g.clubs) this.crediter(u, g.clubs, `Grande Roue : ${ROUE[segment].label}${multiplicateur > 1 ? ` ×${String(multiplicateur).replace('.', ',')}` : ''}`);
+    return { segment, clubs: g.clubs, tickets, jour, multiplicateur, quotidien, etat: this.etat(u) };
+  }
+
+  /** Un tour de roue en plus (les 3 missions du jour faites). */
+  ajouterTourBonus(u: number) {
+    this.ligne(u);
+    this.db.prepare('UPDATE portefeuilles SET tours_bonus = tours_bonus + 1 WHERE utilisateur = ?').run(u);
   }
 
   coupDePouce(u: number): EtatPortefeuille {

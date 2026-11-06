@@ -9,22 +9,27 @@ function creer() {
   migrer(db);
   db.prepare("INSERT INTO utilisateurs (id, pseudo, hash, cree) VALUES (1, 'thomas', 'x', 0), (2, 'leo', 'x', 0)").run();
   let t = Date.UTC(2026, 10, 5, 10);
-  const p = new Portefeuilles(db, () => t);
+  // Hasard truqué : toujours la première case de la roue (250 ♣)
+  const p = new Portefeuilles(db, () => t, () => 0);
   return { p, avancer: (jours: number) => { t += jours * 86_400_000; } };
 }
 
 describe('Portefeuilles', () => {
-  it('commence avec le solde de bienvenue et encaisse le bonus une fois par jour', () => {
+  it('commence avec le solde de bienvenue et fait tourner la roue une fois par jour, multipliée par la série', () => {
     const { p, avancer } = creer();
     expect(p.etat(1).solde).toBe(SOLDE_DEPART);
-    const r = p.encaisserBonus(1);
-    expect(r.jour).toBe(1);
+    const r = p.tournerRoue(1);
+    expect(r).toMatchObject({ jour: 1, segment: 0, clubs: 250, quotidien: true });
     expect(r.etat.solde).toBe(SOLDE_DEPART + 250);
-    expect(() => p.encaisserBonus(1)).toThrow('déjà');
-    avancer(1); p.encaisserBonus(1);
-    avancer(1); const j3 = p.encaisserBonus(1);
-    expect(j3.jour).toBe(3);
+    expect(() => p.tournerRoue(1)).toThrow('demain');
+    avancer(1); p.tournerRoue(1);
+    avancer(1); const j3 = p.tournerRoue(1);
+    expect(j3).toMatchObject({ jour: 3, multiplicateur: 1.5, clubs: 375, tickets: 1 });
     expect(j3.etat.tickets).toBe(1);
+    // Un tour en plus gagné avec les missions
+    p.ajouterTourBonus(1);
+    expect(p.tournerRoue(1)).toMatchObject({ quotidien: false, jour: 3, clubs: 375 });
+    expect(() => p.tournerRoue(1)).toThrow('demain');
     // Un jour raté : retour au jour 1
     avancer(2);
     expect(p.etat(1).bonus).toMatchObject({ jour: 1, dispo: true, reprise: true });

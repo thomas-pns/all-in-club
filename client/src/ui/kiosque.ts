@@ -3,7 +3,8 @@
  * Tout s'affiche dans la zone de contenu du Club (le portefeuille et les onglets restent visibles).
  */
 import type { TypeTicket } from '../../../moteur/kiosque';
-import { TICKETS, tauxRetour, KENO, KENO_GAINS, LOTO, LOTO_GAINS, motForme, lignesMorpion, SymboleMorpion } from '../../../moteur/kiosque';
+import { TICKETS, tauxRetour, chanceGain, casesGagnantes, KENO, KENO_GAINS, LOTO, LOTO_GAINS } from '../../../moteur/kiosque';
+import type { ContenuBanco, ContenuCoffre, ContenuTrefle, ContenuMillionnaire } from '../../../moteur/kiosque';
 import { api, ErreurApi } from '../reseau';
 import { fmt } from '../art/rendu';
 import { jouerSon } from '../vue/son';
@@ -27,9 +28,10 @@ const duree = (ms: number) => { const s = Math.max(0, Math.ceil(ms / 1000)); ret
 const erreur = (e: unknown) => toast(e instanceof ErreurApi ? e.message : 'Le Kiosque ne répond pas', true);
 
 const TICKETS_VITRINE: { type: TypeTicket; nom: string; prix: number; accroche: string; max: number }[] = [
-  { type: 'morpion', nom: 'Morpion', prix: 200, accroche: 'Aligne 3 ♣', max: 20_000 },
-  { type: 'numeros', nom: 'Numéros Gagnants', prix: 500, accroche: 'Tes numéros = les gagnants ?', max: 100_000 },
-  { type: 'mots', nom: 'Mots Croisés', prix: 1_000, accroche: 'Forme des mots', max: 150_000 },
+  { type: 'banco', nom: 'Le Banco', prix: 100, accroche: '3 montants pareils', max: 20_000 },
+  { type: 'coffre', nom: 'Le Coffre', prix: 500, accroche: 'Ouvre le coffre-fort', max: 100_000 },
+  { type: 'trefle', nom: 'Trèfle Cash', prix: 1_000, accroche: 'Plus d\'1 chance sur 4', max: 250_000 },
+  { type: 'millionnaire', nom: 'Le Millionnaire', prix: 5_000, accroche: '3 jeux, 1 million', max: 1_000_000 },
 ];
 
 /* ================================ Vitrine ================================ */
@@ -39,7 +41,7 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   c.innerHTML = `<div class="kiosque-vue">
     <h1 style="font-size:26px;margin-bottom:10px">Le Kiosque</h1>
     <div class="auvent-large"></div>
-    ${offerts ? `<button class="annonce bonus" data-offert><span class="mini-ticket"><i></i><i class="g"></i><i></i><i class="g"></i><i></i><i class="g"></i></span><span><b>${offerts} ticket${offerts > 1 ? 's' : ''} offert${offerts > 1 ? 's' : ''}</b><small>Un Morpion gratuit à gratter, touche pour le prendre</small></span></button>` : ''}
+    ${offerts ? `<button class="annonce bonus" data-offert><span class="mini-ticket"><i></i><i class="g"></i><i></i><i class="g"></i><i></i><i class="g"></i></span><span><b>${offerts} ticket${offerts > 1 ? 's' : ''} offert${offerts > 1 ? 's' : ''}</b><small>Un Banco gratuit à gratter, touche pour le prendre</small></span></button>` : ''}
     <h3 class="titre-rubrique">Tickets à gratter</h3>
     <div class="rangee-tickets">${TICKETS_VITRINE.map((t) => `<button class="ticket t-${t.type}" data-ticket="${t.type}"><b>${t.nom}</b><span class="zone-grattage">${esc(t.accroche)}</span>
       <span class="pied-ticket"><small>${clubs(t.prix)}</small><i>jusqu'à ${fmt(t.max)}</i></span></button>`).join('')}</div>
@@ -52,7 +54,7 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   </div>`;
   $$('[data-ticket]', c).forEach((b) => b.onclick = () => ctx.aller(`ticket:${b.dataset.ticket}`));
   $$('[data-vue]', c).forEach((b) => b.onclick = () => ctx.aller(b.dataset.vue!));
-  const o = $('[data-offert]', c); if (o) o.onclick = () => ctx.aller('ticket:morpion:offert');
+  const o = $('[data-offert]', c); if (o) o.onclick = () => ctx.aller('ticket:banco:offert');
   // Comptes à rebours des tirages (calés sur l'heure du serveur)
   let decalage = 0, cagnotte: number | null = null;
   void api<{ maintenant: number; cagnotte: number }>('/api/kiosque/loto').then((r) => {
@@ -76,7 +78,8 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
 interface ReponseTicket { id: number; type: TypeTicket; gain: number; contenu: any; etat: EtatPortefeuille }
 
 export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket, offert: boolean) {
-  const def = TICKETS_VITRINE.find((t) => t.type === type)!;
+  const def = TICKETS_VITRINE.find((t) => t.type === type) ?? TICKETS_VITRINE[0];
+  type = def.type;
   c.innerHTML = `<div class="vue-ticket">
     <div class="ligne" style="gap:10px;margin-bottom:12px"><button class="btn btn-rond btn-fantome" data-retour aria-label="Retour au Kiosque">←</button><h1 style="font-size:24px">${def.nom}</h1></div>
     <div data-ticket-zone></div>
@@ -85,21 +88,23 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
   </div>`;
   $('[data-retour]', c).onclick = () => ctx.aller('kiosque');
   let gratuitCourant = offert;
+
+  const ticketHTML = (r: ReponseTicket, emballe: boolean) => `<div class="ticket-grand t-${type} ${emballe ? 'emballe' : ''}">
+      <div class="entete-ticket"><b>${def.nom}</b><span class="prix">${gratuitCourant ? 'offert' : clubs(def.prix)}</span></div>
+      <p class="regle-ticket">${accroche(type)}</p>
+      <div class="jeu-ticket">${contenuHTML(r)}${emballe ? '' : '<canvas class="couche-grattage"></canvas>'}</div>
+      <div class="pied-ticket"><small>Gagne jusqu'à ${clubs(def.max)}</small><small>${emballe ? 'n° ——————' : `n° ${String(r.id).padStart(6, '0')}`}</small></div>
+    </div>`;
+
   presenter(offert);
 
   /** Le ticket encore emballé : rien n'est débité tant qu'on n'a pas appuyé sur « Jouer ». */
   function presenter(gratuit: boolean) {
     gratuitCourant = gratuit;
     $('[data-resultat]', c).innerHTML = '';
-    $('[data-ticket-zone]', c).innerHTML = `<div class="ticket-grand t-${type} emballe">
-      <div class="entete-ticket"><b>${def.nom}</b><span class="prix">${gratuit ? 'offert' : clubs(def.prix)}</span></div>
-      <p class="regle-ticket">${regle(type)}</p>
-      <div class="jeu-ticket">${contenuHTML(exemple(type))}</div>
-      ${type === 'mots' ? '<div class="liste-mots"><span class="attente-mots">Tes 6 mots s\'affichent ici</span></div>' : ''}
-      <div class="pied-ticket"><small>Lot maximal ${clubs(def.max)}</small><small>n° ——————</small></div>
-    </div>`;
+    $('[data-ticket-zone]', c).innerHTML = ticketHTML(exemple(type), true);
     const solde = ctx.porte()?.solde ?? 0, assez = gratuit || solde >= def.prix;
-    $('[data-actions]', c).innerHTML = `<button class="btn" data-regles>Règles</button>
+    $('[data-actions]', c).innerHTML = `<button class="btn btn-regles" data-regles aria-label="Règles">⚙ Règles</button>
       <button class="btn btn-or" data-jouer ${assez ? '' : 'disabled'}>${gratuit ? 'Jouer (offert)' : assez ? `Jouer · ${clubs(def.prix)}` : 'Pas assez de Clubs'}</button>`;
     $('[data-regles]', c).onclick = () => ouvrirReglesTicket(type);
     $('[data-jouer]', c).onclick = () => void acheter(gratuit);
@@ -120,25 +125,17 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
 
   function afficherTicket(r: ReponseTicket) {
     const zone = $('[data-ticket-zone]', c);
-    zone.innerHTML = `<div class="ticket-grand t-${type}">
-      <div class="entete-ticket"><b>${def.nom}</b><span class="prix">${gratuitCourant ? 'offert' : clubs(def.prix)}</span></div>
-      <p class="regle-ticket">${regle(type)}</p>
-      <div class="jeu-ticket">${contenuHTML(r)}<canvas class="couche-grattage"></canvas></div>
-      ${type === 'mots' ? `<div class="liste-mots">${(r.contenu.mots as string[]).map((m) => `<span data-mot="${m}">${m.split('').map((l) => `<i data-l="${l}">${l}</i>`).join('')}</span>`).join('')}</div>` : ''}
-      <div class="pied-ticket"><small>Lot maximal ${clubs(def.max)}</small><small>n° ${String(r.id).padStart(6, '0')}</small></div>
-    </div>`;
-    $('[data-actions]', c).innerHTML = `<button class="btn" data-regles>Règles</button><button class="btn btn-ciel" data-tout>Tout gratter</button>`;
+    zone.innerHTML = ticketHTML(r, false);
+    $('[data-actions]', c).innerHTML = `<button class="btn btn-regles" data-regles aria-label="Règles">⚙ Règles</button><button class="btn btn-ciel" data-auto>AUTO</button>`;
     $('[data-regles]', c).onclick = () => ouvrirReglesTicket(type);
-    const lettresVues: string[] = [];
+    const gagnantes = new Set(casesGagnantes({ type, gain: r.gain, contenu: r.contenu }));
     let fini = false;
     const reveler = () => {
       if (fini) return;
       fini = true;
       const cv = $('canvas', zone) as HTMLCanvasElement | null;
       if (cv) { cv.style.transition = 'opacity .4s'; cv.style.opacity = '0'; setTimeout(() => cv.remove(), 420); }
-      if (type === 'mots') marquerMots(r.contenu.lettres as string[]);
-      if (type === 'morpion') lignesMorpion(r.contenu.grille as SymboleMorpion[]).flat().forEach((i) => $(`[data-case="${i}"]`, zone)?.classList.add('gagnante'));
-      if (type === 'numeros') $$('[data-num]', zone).forEach((e) => e.classList.toggle('gagnante', (r.contenu.gagnants as number[]).includes(Number(e.dataset.num))));
+      $$('[data-id]', zone).forEach((e) => e.classList.toggle('gagnante', gagnantes.has(e.dataset.id!)));
       const res = $('[data-resultat]', c);
       if (r.gain) {
         res.innerHTML = `<div class="resultat-ticket gagne"><b>Gagné ! +${clubs(r.gain)}</b><span>${r.gain >= def.prix * 10 ? 'Gros lot, bravo !' : 'Crédité sur ton portefeuille'}</span></div>`;
@@ -152,64 +149,80 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
       }
       $('[data-actions]', c).innerHTML = `<button class="btn" data-kiosque>Le Kiosque</button><button class="btn btn-or" data-encore>Un autre ticket</button>`;
       $('[data-kiosque]', c).onclick = () => ctx.aller('kiosque');
-      $('[data-encore]', c).onclick = () => { const offerts = ctx.porte()?.tickets ?? 0; presenter(type === 'morpion' && offerts > 0); };
+      $('[data-encore]', c).onclick = () => { const offerts = ctx.porte()?.tickets ?? 0; presenter(type === 'banco' && offerts > 0); };
     };
-    /** Mots Croisés : chaque lettre grattée s'allume dans la liste des mots. */
-    const marquerMots = (lettres: string[]) => $$('[data-mot]', zone).forEach((s) => {
-      $$('[data-l]', s).forEach((i) => i.classList.toggle('vu', lettres.includes(i.dataset.l!)));
-      s.classList.toggle('forme', motForme(s.dataset.mot!, lettres));
+    // Chaque case découverte s'allume si elle gagne, tout de suite
+    const surZone = (el: HTMLElement) => { el.classList.add('decouvert'); if (gagnantes.has(el.dataset.id!)) { el.classList.add('gagnante'); jouerSon('jeton'); } };
+    requestAnimationFrame(() => {
+      const g = installerGrattage($('canvas', zone) as HTMLCanvasElement, $$('[data-grat]', zone), surZone, reveler);
+      $('[data-auto]', c).onclick = (e) => { (e.currentTarget as HTMLButtonElement).disabled = true; void g?.auto(); };
     });
-    const surZone = (el: HTMLElement) => {
-      el.classList.add('decouvert');
-      if (type === 'mots' && el.dataset.lettre) { lettresVues.push(el.dataset.lettre); marquerMots(lettresVues); }
-    };
-    $('[data-tout]', c).onclick = reveler;
-    requestAnimationFrame(() => installerGrattage($('canvas', zone) as HTMLCanvasElement, $$('[data-grat]', zone), surZone, reveler));
   }
 }
 
 /** Un ticket « vierge » pour la présentation : la mise en page exacte, sans le contenu. */
 function exemple(type: TypeTicket): ReponseTicket {
-  const contenu = type === 'morpion' ? { lot: 0, grille: Array(9).fill('') }
-    : type === 'numeros' ? { gagnants: [0, 0], mes: Array.from({ length: 8 }, () => ({ n: 0, lot: 0 })) }
-    : { lettres: Array(14).fill(''), mots: [] };
+  const contenu: unknown = type === 'banco' ? { cases: Array(6).fill(0) } satisfies ContenuBanco
+    : type === 'coffre' ? { gagnants: [0, 0, 0], lingots: Array.from({ length: 10 }, () => ({ n: 0, lot: 0 })) } satisfies ContenuCoffre
+    : type === 'trefle' ? { gagnants: [0, 0, 0, 0, 0], cases: Array.from({ length: 20 }, () => ({ n: 0, lot: 0 })) } satisfies ContenuTrefle
+    : { symboles: { cases: ['', '', ''], lot: 0 }, duel: { mes: [0, 0, 0], sien: 0, lot: 0 }, couronne: { cases: Array(6).fill(''), lot: 0 } } satisfies ContenuMillionnaire;
   return { id: 0, type, gain: 0, contenu, etat: { solde: 0, tickets: 0 } };
 }
 
 /** Les règles d'un ticket, avec le tableau des lots et les chances de les gagner. */
 function ouvrirReglesTicket(type: TypeTicket) {
   const d = TICKETS[type];
-  const total = d.gains.reduce((s, [, p]) => s + p, 0);
   const p = panneau(`<h2>${d.nom} · règles</h2>
     <p>${esc(d.regle)}</p>
-    <p class="doux petit">Gratte les cases argentées au doigt (ou à la souris), une par une. Pressé ? « Tout gratter » découvre tout d'un coup.</p>
+    <p class="doux petit">Gratte les cases argentées au doigt (ou à la souris), une par une. Pressé ? « AUTO » gratte tout pour toi.</p>
     <table class="table-lots"><thead><tr><th>Lot</th><th>Chance</th></tr></thead><tbody>
       ${[...d.gains].reverse().map(([g, pr]) => `<tr><td><b>${clubs(g)}</b>${g === d.prix ? ' <small>(remboursé)</small>' : ''}</td><td>1 sur ${fmt(Math.round(1_000_000 / pr))}</td></tr>`).join('')}
     </tbody></table>
-    <p class="doux petit" style="margin-top:10px">Prix du ticket : ${clubs(d.prix)} · un ticket gagnant sur ${(1_000_000 / total).toFixed(1).replace('.', ',')} · en moyenne, ${Math.round(tauxRetour(d) * 100)} % des mises reviennent aux joueurs.</p>
+    <p class="doux petit" style="margin-top:10px">Prix du ticket : ${clubs(d.prix)} · un ticket gagnant sur ${(1 / chanceGain(d)).toFixed(1).replace('.', ',')} · en moyenne, ${Math.round(tauxRetour(d) * 100)} % des mises reviennent aux joueurs.</p>
     <button class="btn btn-or btn-plein" data-ok>Compris</button>`);
   $('[data-ok]', p.el).onclick = () => p.fermer();
 }
 
-function regle(type: TypeTicket) {
-  return type === 'morpion' ? 'Aligne 3 ♣ (ligne, colonne ou diagonale) et tu gagnes le lot.'
-    : type === 'numeros' ? 'Un de tes numéros est un numéro gagnant ? Tu gagnes le lot écrit dessous.'
-    : 'Gratte tes 14 lettres. Chaque mot dont tu as toutes les lettres compte : 2 mots ou plus, tu gagnes.';
+function accroche(type: TypeTicket) {
+  return type === 'banco' ? '3 montants identiques ? Tu gagnes ce montant.'
+    : type === 'coffre' ? 'Un de tes lingots porte un numéro gagnant ? Tu gagnes le lot écrit dessous.'
+    : type === 'trefle' ? 'Tes numéros parmi les gagnants rapportent leur lot. Un ♣ gagne directement !'
+    : '3 jeux sur un ticket : les gains s\'additionnent.';
 }
 
+const lot = (n: number) => (n ? fmt(n) : '');
+const numero = (n: number | null) => (n === null ? '♣' : n ? String(n) : '');
+
 function contenuHTML(r: ReponseTicket): string {
-  const ct = r.contenu;
-  if (r.type === 'morpion') {
-    return `<div class="lot-morpion"><small>Lot</small><b data-grat>${ct.lot ? clubs(ct.lot) : ''}</b></div>
-      <div class="grille-morpion">${(ct.grille as string[]).map((s, i) => `<span data-grat data-case="${i}" class="${s === '♣' ? 'trefle' : ''}">${s}</span>`).join('')}</div>`;
+  if (r.type === 'banco') {
+    const ct = r.contenu as ContenuBanco;
+    return `<div class="grille-banco">${ct.cases.map((v, i) => `<span data-grat data-id="c${i}"><b>${lot(v)}</b><small>${v ? '♣' : ''}</small></span>`).join('')}</div>`;
   }
-  if (r.type === 'numeros') {
-    return `<div class="gagnants"><small>Numéros gagnants</small><span>${(ct.gagnants as number[]).map((n) => `<b data-grat>${n || ''}</b>`).join('')}</span></div>
-      <div class="mes-numeros">${(ct.mes as { n: number; lot: number }[]).map((m) => `<span data-grat data-num="${m.n}"><b>${m.n || ''}</b><small>${m.lot ? fmt(m.lot) : '&nbsp;'}</small></span>`).join('')}</div>`;
+  if (r.type === 'coffre') {
+    const ct = r.contenu as ContenuCoffre;
+    // Pyramide de lingots : 1, 2, 3, puis 4
+    const rangs = [[0], [1, 2], [3, 4, 5], [6, 7, 8, 9]];
+    return `<div class="coffre-fort"><span class="porte-g"></span><span class="porte-d"></span>
+      <div class="interieur">
+        <span class="etiquette-coffre">NUMÉROS GAGNANTS</span>
+        <div class="piles">${ct.gagnants.map((n, i) => `<span class="pile"><i></i><i></i><i></i><b data-grat data-id="g${i}">${n || ''}</b></span>`).join('')}</div>
+        <span class="etagere"></span>
+        <span class="etiquette-coffre">VOS NUMÉROS</span>
+        <div class="lingots">${rangs.map((rg) => `<div>${rg.map((i) => `<span class="lingot" data-grat data-id="l${i}"><b>${ct.lingots[i].n || ''}</b><small>${lot(ct.lingots[i].lot)}</small></span>`).join('')}</div>`).join('')}</div>
+      </div></div>`;
   }
-  const lots = [[2, 1_000], [3, 2_500], [4, 6_000], [5, 25_000], [6, 150_000]];
-  return `<div class="mes-lettres">${(ct.lettres as string[]).map((l) => `<span data-grat data-lettre="${l}">${l}</span>`).join('')}</div>
-    <div class="bareme-mots">${lots.map(([n, g]) => `<span>${n} mots : ${fmt(g)}</span>`).join('')}</div>`;
+  if (r.type === 'trefle') {
+    const ct = r.contenu as ContenuTrefle;
+    return `<div class="trefle-haut"><span class="logo-trefle">TRÈFLE<br><em>♣CASH</em></span><span class="chance-trefle">PLUS<br><b>D'1 CHANCE<br>SUR 4</b><br>DE GAGNER</span></div>
+      <div class="cadre-trefle"><span class="titre-cadre">N° GAGNANTS</span><div class="etoiles-trefle">${ct.gagnants.map((n, i) => `<span class="etoile-trefle" data-grat data-id="g${i}"><b>${n || ''}</b></span>`).join('')}</div></div>
+      <div class="cadre-trefle"><span class="titre-cadre">VOS NUMÉROS</span><div class="grille-trefle">${ct.cases.map((x, i) => `<span data-grat data-id="c${i}" class="${x.n === null ? 'trefle-direct' : ''}"><b>${numero(x.n)}</b><small>${lot(x.lot)}</small></span>`).join('')}</div></div>`;
+  }
+  const ct = r.contenu as ContenuMillionnaire;
+  const jeu = (titre: string, lotJeu: number, corps: string) => `<div class="jeu-million"><div class="titre-jeu"><b>${titre}</b><small>${lotJeu ? `lot : ${clubs(lotJeu)}` : ''}</small></div>${corps}</div>`;
+  return `<div class="bandeau-million">GROS LOT ${clubs(1_000_000)}</div>
+    ${jeu('Jeu 1 · 3 symboles identiques', ct.symboles.lot, `<div class="cases-million trois">${ct.symboles.cases.map((x, i) => `<span data-grat data-id="s${i}">${x}</span>`).join('')}</div>`)}
+    ${jeu('Jeu 2 · Un de tes numéros bat le sien', ct.duel.lot, `<div class="duel-million"><div class="cases-million trois">${ct.duel.mes.map((n, i) => `<span data-grat data-id="d${i}"><b>${n || ''}</b></span>`).join('')}</div><em>contre</em><span class="sien" data-grat data-id="sien"><b>${ct.duel.sien || ''}</b></span></div>`)}
+    ${jeu('Jeu 3 · Trouve la 👑', ct.couronne.lot, `<div class="cases-million six">${ct.couronne.cases.map((x, i) => `<span data-grat data-id="k${i}">${x}</span>`).join('')}</div>`)}`;
 }
 
 /** Arrondi d'une zone argentée. */
@@ -220,9 +233,10 @@ function rectArrondi(x: CanvasRenderingContext2D, l: number, t: number, w: numbe
 /**
  * La couche argentée : seules les cases du ticket sont recouvertes, chacune se gratte au doigt.
  * Une case grattée à plus de moitié se découvre d'elle-même ; quand toutes le sont, le ticket est fini.
+ * `auto()` gratte les cases restantes une à une, comme une main pressée.
  */
 function installerGrattage(cv: HTMLCanvasElement, zones: HTMLElement[], surZone: (el: HTMLElement) => void, fini: () => void) {
-  if (!cv || !cv.isConnected) return;
+  if (!cv || !cv.isConnected) return null;
   const r = cv.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
@@ -234,26 +248,35 @@ function installerGrattage(cv: HTMLCanvasElement, zones: HTMLElement[], surZone:
   m.strokeStyle = '#B5AEC6'; m.lineWidth = 5; m.beginPath(); m.moveTo(-4, 20); m.lineTo(20, -4); m.stroke();
   const cases = zones.map((el) => {
     const b = el.getBoundingClientRect();
-    const rayon = parseFloat(getComputedStyle(el).borderRadius) || 10;
+    const rayon = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 8;
     return { el, l: b.left - r.left, t: b.top - r.top, w: b.width, h: b.height, rayon: Math.min(rayon, b.height / 2, b.width / 2), vu: false };
   });
   for (const z of cases) {
     x.fillStyle = x.createPattern(motif, 'repeat')!;
     rectArrondi(x, z.l, z.t, z.w, z.h, z.rayon); x.fill();
     x.strokeStyle = '#A39BB6'; x.lineWidth = 2; x.stroke();
-    x.fillStyle = 'rgba(58,45,94,.4)'; x.font = `700 ${Math.round(Math.min(22, z.h * 0.42))}px Fredoka, sans-serif`;
+    x.fillStyle = 'rgba(58,45,94,.4)'; x.font = `700 ${Math.round(Math.min(20, z.h * 0.42))}px Fredoka, sans-serif`;
     x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('♣', z.l + z.w / 2, z.t + z.h / 2 + 1);
   }
   x.globalCompositeOperation = 'destination-out';
-  let dernier: { x: number; y: number } | null = null, coups = 0, son = 0;
-  const gratter = (px: number, py: number) => {
-    x.lineCap = 'round'; x.lineWidth = 26;
+  let dernier: { x: number; y: number } | null = null, coups = 0, son = 0, termine = false;
+  const trait = (px: number, py: number, epais = 24) => {
+    x.lineCap = 'round'; x.lineWidth = epais;
     x.beginPath();
     if (dernier) { x.moveTo(dernier.x, dernier.y); x.lineTo(px, py); x.stroke(); }
-    x.arc(px, py, 13, 0, Math.PI * 2); x.fill();
+    x.arc(px, py, epais / 2, 0, Math.PI * 2); x.fill();
     dernier = { x: px, y: py };
+  };
+  const gratter = (px: number, py: number) => {
+    trait(px, py);
     const t = performance.now(); if (t - son > 110) { son = t; jouerSon('carte'); }
     if (++coups % 6 === 0) verifier();
+  };
+  const decouvrir = (z: (typeof cases)[number]) => {
+    z.vu = true;
+    x.save(); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.fillStyle = '#000';
+    rectArrondi(x, z.l - 3, z.t - 3, z.w + 6, z.h + 6, z.rayon + 3); x.fill(); x.restore();
+    surZone(z.el);
   };
   const verifier = () => {
     for (const z of cases) {
@@ -263,19 +286,34 @@ function installerGrattage(cv: HTMLCanvasElement, zones: HTMLElement[], surZone:
       const d = x.getImageData(l, t, w, h).data;
       let vides = 0, n = 0;
       for (let i = 3; i < d.length; i += 4 * 7) { n++; if (d[i] < 40) vides++; }
-      if (vides / n > 0.5) {
-        z.vu = true;
-        x.save(); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.fillStyle = '#000';
-        rectArrondi(x, z.l - 3, z.t - 3, z.w + 6, z.h + 6, z.rayon + 3); x.fill(); x.restore();
-        surZone(z.el);
-      }
+      if (vides / n > 0.5) decouvrir(z);
     }
-    if (cases.every((z) => z.vu)) fini();
+    if (!termine && cases.every((z) => z.vu)) { termine = true; fini(); }
   };
   const pos = (e: PointerEvent) => { const b = cv.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
   cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); dernier = null; const p = pos(e); gratter(p.x, p.y); });
   cv.addEventListener('pointermove', (e) => { if (!cv.hasPointerCapture(e.pointerId)) return; const p = pos(e); gratter(p.x, p.y); });
   cv.addEventListener('pointerup', () => { dernier = null; verifier(); });
+  const pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+  return {
+    /** Gratte toutes les cases restantes, une à une, en zigzag. */
+    async auto() {
+      for (const z of cases) {
+        if (z.vu || !cv.isConnected) continue;
+        dernier = null;
+        const passes = Math.max(2, Math.ceil(z.h / 18));
+        for (let k = 0; k <= passes * 2; k++) {
+          const px = z.l + (k % 2 ? z.w - 6 : 6), py = z.t + 6 + ((z.h - 12) * k) / (passes * 2);
+          trait(px, py, 22);
+          if (k % 3 === 0) jouerSon('carte');
+          await pause(14);
+        }
+        decouvrir(z);
+        await pause(70);
+      }
+      verifier();
+    },
+  };
 }
 
 /* ================================ Keno ================================ */

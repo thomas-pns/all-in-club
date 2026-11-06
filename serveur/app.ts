@@ -15,7 +15,9 @@ import { listeSucces, CADRES, DOS } from '../moteur/succes.js';
 import { Donnees } from './donnees.js';
 import { Notifications } from './notifications.js';
 import { Portefeuilles, ErreurPortefeuille } from './portefeuille.js';
-import { Kiosque } from './kiosque.js';
+import { Activites } from './activites.js';
+import { ROUE } from '../moteur/bonus.js';
+import { Kiosque, fmtClubs } from './kiosque.js';
 import { TICKETS, KENO, KENO_GAINS, LOTO, LOTO_GAINS } from '../moteur/kiosque.js';
 
 export const VERSION = '0.2.0';
@@ -48,11 +50,13 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   const comptes = new Comptes(o.db);
   const donnees = new Donnees(o.db);
   const portefeuilles = new Portefeuilles(o.db);
+  const activites = new Activites(o.db, portefeuilles);
   const kiosque = new Kiosque(o.db, portefeuilles);
+  kiosque.activites = activites;
   kiosque.demarrer();
   app.addHook('onClose', async () => kiosque.arreter());
   const notifications = new Notifications(o.db, o.urlPublique ?? 'mailto:admin@all-in-club.invalid');
-  const hall = new Hall(donnees, notifications, portefeuilles);
+  const hall = new Hall(donnees, notifications, portefeuilles, activites);
   hall.restaurer();
   const limiteAuth = limiteur(10, 5 * 60_000);
   const limiteMail = limiteur(3, 15 * 60_000);
@@ -93,7 +97,15 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   /* Portefeuille en Clubs ♣ (argent fictif) */
   app.get('/api/portefeuille', async (req) => portefeuilles.etat(exigerUtilisateur(req).id));
   app.get('/api/portefeuille/mouvements', async (req) => ({ mouvements: portefeuilles.mouvements(exigerUtilisateur(req).id) }));
-  app.post('/api/portefeuille/bonus', async (req) => portefeuilles.encaisserBonus(exigerUtilisateur(req).id));
+  app.post('/api/portefeuille/roue', async (req) => {
+    const u = exigerUtilisateur(req).id;
+    const r = portefeuilles.tournerRoue(u);
+    // Le jackpot est annoncé une fois la roue arrêtée
+    if (ROUE[r.segment].label === 'JACKPOT') setTimeout(() => activites.annoncer(u, `a décroché le JACKPOT de la Grande Roue : ${fmtClubs(r.clubs)} !`, r.clubs), 7_000).unref();
+    return r;
+  });
+  app.get('/api/missions', async (req) => activites.missions(exigerUtilisateur(req).id));
+  app.get('/api/annonces', async (req) => { exigerUtilisateur(req); return { annonces: activites.annonces() }; });
   app.post('/api/portefeuille/coup-de-pouce', async (req) => portefeuilles.coupDePouce(exigerUtilisateur(req).id));
   /* Le Kiosque : tickets à gratter, Keno, Loto Flash */
   app.get('/api/kiosque', async () => ({

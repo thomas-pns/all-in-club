@@ -57,7 +57,7 @@ nouveau venu qui attend la grosse blinde ou la paie pour entrer.
 
 ```bash
 npm install
-npm test          # 124 tests, dont 100 000 mains aléatoires simulées et une partie en ligne de bout en bout
+npm test          # 133 tests, dont 100 000 mains aléatoires simulées et une partie en ligne de bout en bout
 npm run typecheck
 ```
 

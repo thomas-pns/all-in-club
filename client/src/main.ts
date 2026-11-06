@@ -24,8 +24,8 @@ import { SalleRoulette, ReglagesRoulette, MessageRoulette } from '../../moteur/r
 import { EcranHall } from './ui/club';
 import type { JeuCasino } from './ui/ecrans';
 import { ecranConnexion, ecranReinitialiser, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces } from './ui/ecrans';
-import { toast, html } from './ui/commun';
-import { debloquerSon, reglerSon } from './vue/son';
+import { toast, html, esc } from './ui/commun';
+import { debloquerSon, reglerSon, jouerSon } from './vue/son';
 import { volumeMusique } from './vue/musique';
 import { lirePrefs, suivrePrefs, definirNotifications, ecrirePrefs } from './ui/commun';
 
@@ -104,12 +104,29 @@ function connecte(u: Utilisateur, jeton: string) {
   allerHall();
 }
 
+/** Une bannière qui glisse du haut de l'écran quelques secondes (gros gains, missions). */
+function bannierAnnonce(contenu: string, genre: 'gain' | 'mission' = 'gain') {
+  const b = html(`<div class="banniere-annonce ${genre}" role="status">${contenu}</div>`);
+  document.body.appendChild(b);
+  if (genre === 'mission') jouerSon('gagne');
+  setTimeout(() => { b.classList.add('part'); setTimeout(() => b.remove(), 500); }, 4200);
+}
+
 function surMessage(m: MessageServeur) {
   switch (m.type) {
     case 'hall': hall?.majTables(m.tables, m.enLigne, m.villes); break;
     // (Re)connexion : la demande de liste a pu partir avant l'ouverture du WebSocket
     case 'bienvenue': if (hall) reseau?.envoyer({ type: 'hall' }); break;
     case 'succes': annoncerSucces(m.succes); break;
+    case 'annonce':
+      hall?.nouvelleAnnonce(m.annonce);
+      // Pas la peine de se l'annoncer à soi-même : on vient de le voir
+      if (m.annonce.pseudo.toLowerCase() !== utilisateur?.pseudo.toLowerCase()) bannierAnnonce(`🎉 <b>${esc(m.annonce.pseudo)}</b> ${esc(m.annonce.texte)}`);
+      break;
+    case 'mission':
+      hall?.missionFaite(m.etat);
+      bannierAnnonce(`✅ Mission réussie : <b>${esc(m.mission.texte)}</b> · +${m.mission.recompense.toLocaleString('fr-FR')} ♣${m.toutes ? '<br>Les 3 sont faites : un tour de Grande Roue en plus !' : ''}`, 'mission');
+      break;
     case 'entre': if (m.jeu === 'blackjack') allerBJEnLigne(m.casino); else if (m.jeu === 'roulette') allerRouletteEnLigne(m.casino); else allerTableEnLigne(m.casino); break;
     case 'sorti': if (m.raison) toast(m.raison, true); if (table) { fermerTable(); allerHall(); } break;
     case 'erreur':

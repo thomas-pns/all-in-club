@@ -4,6 +4,7 @@
  */
 import { randomInt } from 'node:crypto';
 import { Base } from './base.js';
+import type { Activites } from './activites.js';
 import { Portefeuilles, ErreurPortefeuille } from './portefeuille.js';
 import {
   TICKETS, TypeTicket, fabriquerTicket, Hasard, KENO, gainKeno, tirerKeno, validerGrilleKeno,
@@ -37,6 +38,9 @@ const hasardSur: Hasard = (n) => randomInt(n);
 export class Kiosque {
   private minuterie: ReturnType<typeof setInterval> | null = null;
 
+  /** Missions et annonces des gros gains (branché par l'application). */
+  activites: Activites | null = null;
+
   constructor(private db: Base, private porte: Portefeuilles, private horloge: () => number = Date.now, private hasard: Hasard = hasardSur) {
     migrerKiosque(db);
   }
@@ -51,12 +55,16 @@ export class Kiosque {
     const d = TICKETS[type];
     if (!d) throw new ErreurPortefeuille('Ticket inconnu');
     if (offert) {
-      if (type !== 'morpion') throw new ErreurPortefeuille('Les tickets offerts sont des Morpion');
+      if (type !== 'banco') throw new ErreurPortefeuille('Les tickets offerts sont des Banco');
       this.porte.utiliserTicketOffert(u);
     } else this.porte.crediter(u, -d.prix, `Ticket ${d.nom}`);
     const t = fabriquerTicket(type, this.hasard);
     const id = Number(this.db.prepare('INSERT INTO tickets (utilisateur, date, type, prix, gain, json) VALUES (?, ?, ?, ?, ?, ?)').run(u, this.horloge(), type, offert ? 0 : d.prix, t.gain, JSON.stringify(t.contenu)).lastInsertRowid);
     if (t.gain) this.porte.crediter(u, t.gain, `Gain ${d.nom}`);
+    this.activites?.signaler(u, 'ticket');
+    if (t.gain) this.activites?.signaler(u, 'ticketGagnant');
+    // Annoncé un peu plus tard : le temps de gratter, pour ne pas gâcher la surprise
+    if (t.gain >= d.prix * 10) this.plusTard(() => this.activites?.annoncer(u, `a gagné ${fmtClubs(t.gain)} au ${d.nom.replace(/^Le /, '')}`, t.gain), 20_000);
     return { id, type, gain: t.gain, contenu: t.contenu, etat: this.porte.etat(u) };
   }
 
@@ -89,8 +97,11 @@ export class Kiosque {
     if (id * KENO.periode - t < KENO.fermeture) id++; // trop tard pour celui-là : le suivant
     this.porte.crediter(u, -g.mise * n, n > 1 ? `Keno (${n} tirages)` : 'Keno');
     for (let i = 0; i < n; i++) this.db.prepare('INSERT INTO keno_grilles (utilisateur, tirage, numeros, mise) VALUES (?, ?, ?, ?)').run(u, id + i, JSON.stringify(g.numeros), g.mise);
+    this.activites?.signaler(u, 'keno');
     return { tirage: id, etat: this.porte.etat(u) };
   }
+
+  private plusTard(f: () => void, ms: number) { const m = setTimeout(f, ms); m.unref?.(); }
 
   /* ----------------------------- Loto Flash ----------------------------- */
 
@@ -127,6 +138,7 @@ export class Kiosque {
     this.porte.crediter(u, -LOTO.prix, 'Loto Flash');
     this.db.prepare('INSERT INTO loto_grilles (utilisateur, tirage, numeros, etoile) VALUES (?, ?, ?, ?)').run(u, id, JSON.stringify(g.numeros), g.etoile);
     this.fixerCagnotte(this.cagnotte() + LOTO.partCagnotte);
+    this.activites?.signaler(u, 'loto');
     return { tirage: id, etat: this.porte.etat(u), cagnotte: this.cagnotte() };
   }
 
@@ -149,6 +161,7 @@ export class Kiosque {
         const gain = gainKeno(JSON.parse(g.numeros), tirage, g.mise);
         this.db.prepare('UPDATE keno_grilles SET gain = ? WHERE id = ?').run(gain, g.id);
         if (gain) this.porte.crediter(g.utilisateur, gain, `Gain Keno n° ${id}`);
+        if (gain >= 2_000 && gain >= g.mise * 20) this.plusTard(() => this.activites?.annoncer(g.utilisateur, `a gagné ${fmtClubs(gain)} au Keno`, gain), 25_000);
       }
     }
     // Loto Flash
@@ -166,6 +179,7 @@ export class Kiosque {
         const gain = !r ? 0 : r.gain === 'cagnotte' ? Math.floor(cagnotte / jackpot) : r.gain;
         this.db.prepare('UPDATE loto_grilles SET gain = ?, rang = ? WHERE id = ?').run(gain, r?.nom ?? null, g.id);
         if (gain) this.porte.crediter(g.utilisateur, gain, r?.gain === 'cagnotte' ? `Cagnotte du Loto Flash !` : `Gain Loto Flash n° ${id}`);
+        if (gain >= 10_000) this.plusTard(() => this.activites?.annoncer(g.utilisateur, r?.gain === 'cagnotte' ? `a décroché la cagnotte du Loto Flash : ${fmtClubs(gain)} !` : `a gagné ${fmtClubs(gain)} au Loto Flash`, gain), 25_000);
       }
       if (jackpot) this.fixerCagnotte(LOTO.cagnotteDepart);
       this.db.prepare('INSERT INTO loto_tirages (id, numeros, etoile, cagnotte, gagnants, date) VALUES (?, ?, ?, ?, ?, ?)').run(id, JSON.stringify(tirage.numeros), tirage.etoile, cagnotte, rangs.filter((x) => x.r).length, t);
@@ -178,3 +192,6 @@ export class Kiosque {
 }
 
 export { LOTO_GAINS };
+
+/** « 12 500 ♣ » */
+export const fmtClubs = (n: number) => `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ♣`;

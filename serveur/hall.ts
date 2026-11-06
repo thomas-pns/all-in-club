@@ -14,7 +14,9 @@ export type Jeu = 'poker' | 'blackjack' | 'roulette';
 const jeuDe = (s: SalleJeu): Jeu => (s instanceof SalleBJ ? 'blackjack' : s instanceof SalleRoulette ? 'roulette' : 'poker');
 import { DefinitionSucces } from '../moteur/succes.js';
 import { Ville, ville as trouverVille, caveDe, reglagesCasino, COMMANDES_HOTE_CASINO } from '../moteur/casino.js';
-import type { Portefeuilles } from './portefeuille.js';
+import type { Portefeuilles, EtatPortefeuille } from './portefeuille.js';
+import type { Activites, Annonce, MissionFaite } from './activites.js';
+import { fmtClubs } from './kiosque.js';
 import { Utilisateur } from './comptes.js';
 import { Donnees, idUtilisateur } from './donnees.js';
 import { Notifications } from './notifications.js';
@@ -44,6 +46,8 @@ export type MessageServeur =
   | { type: 'remplace' }
   | { type: 'succes'; succes: Omit<DefinitionSucces, 'test'>[] }
   | { type: 'erreur'; texte: string }
+  | { type: 'annonce'; annonce: Annonce }
+  | ({ type: 'mission'; etat: EtatPortefeuille | null } & MissionFaite)
   | { type: 'pong' };
 
 interface Client { ws: WebSocket; utilisateur: Utilisateur | null; abonneHall: boolean; compteur: number; fenetre: number; visible: boolean }
@@ -64,7 +68,11 @@ export class Hall {
   private casino = new Map<string, { jeu: Jeu; ville: Ville }>();
   private menage: ReturnType<typeof setInterval>;
 
-  constructor(private donnees: Donnees | null = null, private notifications: Notifications | null = null, private porte: Portefeuilles | null = null) {
+  constructor(private donnees: Donnees | null = null, private notifications: Notifications | null = null, private porte: Portefeuilles | null = null, private activites: Activites | null = null) {
+    if (activites) {
+      activites.surMission = (u, m) => this.envoyerMembre(`u${u}`, { type: 'mission', ...m, etat: this.porte?.etat(u) ?? null });
+      activites.surAnnonce = (a) => { for (const c of this.clients) if (c.utilisateur) this.envoyer(c, { type: 'annonce', annonce: a }); };
+    }
     // Tables restées sans personne pendant 6 heures : supprimées
     this.menage = setInterval(() => {
       for (const s of this.salles.values()) if (s.nbConnectes === 0 && Date.now() - s.derniereActivite > 6 * 3_600_000) this.supprimer(s);
@@ -112,6 +120,19 @@ export class Hall {
         this.envoyerMembre(dest, { type: 'salle', msg: m });
       },
       mainTerminee: (m, _t, s, rec) => {
+        if (this.activites) {
+          try {
+            for (const j of rec.joueurs) this.activites.signaler(idUtilisateur(j.id), 'mainPoker');
+            const lieu = this.casino.get(s.id);
+            for (const g of rec.gagnants) {
+              const j = rec.joueurs.find((x) => x.siege === g.siege);
+              if (!j) continue;
+              const u = idUtilisateur(j.id);
+              this.activites.signaler(u, 'potPoker');
+              if (lieu && u !== null && g.montant >= rec.gb * 100) this.activites.annoncer(u, `a remporté un pot de ${fmtClubs(g.montant)} à ${lieu.ville.nom}`, g.montant);
+            }
+          } catch (e) { console.error('Missions', e); }
+        }
         if (this.donnees) {
           try { this.notifierSucces(this.donnees.enregistrerMain(analyserMain(m), rec, s.reglages.tapisDepart)); }
           catch (e) { console.error('Statistiques', e); }
@@ -150,6 +171,7 @@ export class Hall {
       envoyer: (dest: string, m: MessageBJ | MessageRoulette) => {
         if (m.type === 'exclu') { this.ouEst.delete(dest); this.envoyerMembre(dest, { type: 'sorti', raison: "L'hôte t'a exclu de la table" }); return; }
         this.envoyerMembre(dest, { type: 'salle', msg: m });
+        try { this.suivreMissions(dest, m); } catch (e) { console.error('Missions', e); }
       },
       activite: (id: string, type: 'message' | 'emote') => {
         const u = idUtilisateur(id);
@@ -167,6 +189,30 @@ export class Hall {
         void this.notifications.tour(u, s.reglages.nom).catch(() => {});
       },
     } as SortieBJ & SortieRoulette;
+  }
+
+  /** Chaque joueur reçoit ses propres événements : on y lit ce qui fait avancer ses missions. */
+  private suivreMissions(dest: string, m: MessageBJ | MessageRoulette) {
+    const a = this.activites, u = idUtilisateur(dest);
+    if (!a || u === null) return;
+    if (m.type === 'majBJ' && m.etat.monSiege !== null) {
+      for (const e of m.evenements) {
+        if (e.t !== 'resultat' || e.siege !== m.etat.monSiege) continue;
+        if (e.main === 0) a.signaler(u, 'mancheBJ');
+        if (e.issue === 'gagne' || e.issue === 'blackjack') a.signaler(u, 'gagneBJ');
+        if (e.issue === 'blackjack') a.signaler(u, 'blackjack');
+      }
+    }
+    if (m.type === 'majRoulette' && m.etat.monSiege !== null) {
+      const lieu = this.casino.get(m.etat.id);
+      for (const e of m.evenements) {
+        if (e.t === 'bilan' && e.siege === m.etat.monSiege && e.mise > 0) a.signaler(u, 'tourRoulette');
+        if (e.t === 'gain' && e.siege === m.etat.monSiege && /^\d+$/.test(e.mise)) {
+          a.signaler(u, 'pleinRoulette');
+          if (lieu && e.retour >= 1_000) a.annoncer(u, `a touché le ${e.mise} en plein à ${lieu.ville.nom} (+${fmtClubs(e.retour)})`, e.retour);
+        }
+      }
+    }
   }
 
   private planifierSauvegarde(s: SalleJeu) {

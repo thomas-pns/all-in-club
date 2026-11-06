@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TICKETS, tauxRetour, fabriquerTicket, gainDuContenu, KENO, KENO_GAINS, gainKeno, validerGrilleKeno, LOTO, LOTO_GAINS, rangLoto, validerGrilleLoto, tirerKeno, tirerLoto, prochainTirage, TypeTicket } from '../kiosque.js';
+import { TICKETS, tauxRetour, chanceGain, casesGagnantes, fabriquerTicket, gainDuContenu, KENO, KENO_GAINS, gainKeno, validerGrilleKeno, LOTO, LOTO_GAINS, rangLoto, validerGrilleLoto, tirerKeno, tirerLoto, prochainTirage, TypeTicket } from '../kiosque.js';
 
 let graine = 12345;
 const h = (n: number) => { graine = (graine * 1103515245 + 12345) & 0x7fffffff; return graine % n; };
@@ -18,6 +18,17 @@ describe('Tickets à gratter', () => {
       for (let i = 0; i < 1500; i++) {
         const t = fabriquerTicket(type, h);
         expect(gainDuContenu(t), `${type} n°${i}`).toBe(t.gain);
+      }
+    }
+  });
+  it('Trèfle Cash : plus d\'une chance sur 4 de gagner', () => {
+    expect(chanceGain(TICKETS.trefle)).toBeGreaterThan(0.25);
+  });
+  it('signalent des cases gagnantes seulement sur les tickets gagnants', () => {
+    for (const type of Object.keys(TICKETS) as TypeTicket[]) {
+      for (let i = 0; i < 300; i++) {
+        const t = fabriquerTicket(type, h);
+        expect(casesGagnantes(t).length > 0, `${type} n°${i}`).toBe(t.gain > 0);
       }
     }
   });

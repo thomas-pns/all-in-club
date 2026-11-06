@@ -11,7 +11,7 @@ export type Hasard = (n: number) => number;
 
 /* ============================ Tickets à gratter ============================ */
 
-export type TypeTicket = 'morpion' | 'numeros' | 'mots';
+export type TypeTicket = 'banco' | 'coffre' | 'trefle' | 'millionnaire';
 
 export interface DefTicket {
   type: TypeTicket; nom: string; prix: number; regle: string;
@@ -20,22 +20,28 @@ export interface DefTicket {
 }
 
 export const TICKETS: Record<TypeTicket, DefTicket> = {
-  morpion: {
-    type: 'morpion', nom: 'Morpion', prix: 200, regle: 'Aligne 3 ♣ en ligne, en colonne ou en diagonale : tu gagnes le lot du ticket.',
-    gains: [[200, 200_000], [400, 80_000], [1_000, 40_000], [2_000, 15_000], [5_000, 4_000], [20_000, 500]],
+  banco: {
+    type: 'banco', nom: 'Le Banco', prix: 100, regle: 'Gratte les 6 cases : 3 montants identiques et tu gagnes ce montant.',
+    gains: [[100, 250_000], [200, 100_000], [500, 30_000], [1_000, 10_000], [5_000, 1_000], [20_000, 100]],
   },
-  numeros: {
-    type: 'numeros', nom: 'Numéros Gagnants', prix: 500, regle: 'Si l\'un de tes numéros est un des 2 numéros gagnants, tu gagnes le lot écrit dessous.',
-    gains: [[500, 220_000], [1_000, 100_000], [2_500, 30_000], [5_000, 12_000], [20_000, 2_000], [100_000, 200]],
+  coffre: {
+    type: 'coffre', nom: 'Le Coffre', prix: 500, regle: 'Si l\'un de tes 10 lingots porte un des 3 numéros gagnants, tu gagnes le lot écrit dessous.',
+    gains: [[500, 220_000], [1_000, 100_000], [2_000, 40_000], [5_000, 12_000], [20_000, 1_500], [100_000, 100]],
   },
-  mots: {
-    type: 'mots', nom: 'Mots Croisés', prix: 1_000, regle: 'Gratte tes lettres : chaque mot entièrement formé compte. 2 mots ou plus et tu gagnes.',
-    gains: [[1_000, 250_000], [2_500, 80_000], [6_000, 25_000], [25_000, 4_000], [150_000, 300]],
+  trefle: {
+    type: 'trefle', nom: 'Trèfle Cash', prix: 1_000, regle: 'Chacun de tes 20 numéros qui est un des 5 numéros gagnants rapporte son lot. Un ♣ gagne directement son lot.',
+    gains: [[1_000, 170_000], [2_000, 60_000], [5_000, 30_000], [10_000, 15_000], [20_000, 4_000], [50_000, 1_500], [250_000, 100]],
+  },
+  millionnaire: {
+    type: 'millionnaire', nom: 'Le Millionnaire', prix: 5_000, regle: '3 jeux sur un ticket, chacun avec son lot : 3 symboles identiques, un de tes numéros plus grand que le sien, ou une 👑 dans la dernière ligne. Les gains s\'additionnent.',
+    gains: [[5_000, 220_000], [10_000, 100_000], [25_000, 35_000], [50_000, 12_000], [200_000, 1_500], [1_000_000, 100]],
   },
 };
 
 /** Gain moyen rendu par ticket (pour vérifier que le Kiosque ne distribue pas d'argent gratuit). */
 export const tauxRetour = (d: DefTicket) => d.gains.reduce((s, [g, p]) => s + g * p, 0) / 1_000_000 / d.prix;
+/** Chance de gagner quelque chose (de 0 à 1). */
+export const chanceGain = (d: DefTicket) => d.gains.reduce((s, [, p]) => s + p, 0) / 1_000_000;
 
 /** Tire le gain d'un ticket (0 = perdu). */
 export function tirerGain(d: DefTicket, h: Hasard): number {
@@ -45,70 +51,83 @@ export function tirerGain(d: DefTicket, h: Hasard): number {
 }
 
 const melanger = <T>(l: T[], h: Hasard) => { const r = l.slice(); for (let i = r.length - 1; i > 0; i--) { const j = h(i + 1); [r[i], r[j]] = [r[j], r[i]]; } return r; };
+const piocher = <T>(l: T[], h: Hasard) => l[h(l.length)];
+const lotsDe = (d: DefTicket) => d.gains.map(([g]) => g);
 
-/* ---- Morpion ---- */
-const LIGNES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
-export type SymboleMorpion = '♣' | '✕' | '○';
-export const lignesMorpion = (g: SymboleMorpion[]) => LIGNES.filter((l) => l.every((i) => g[i] === '♣'));
-
-function morpion(gain: number, h: Hasard, d: DefTicket) {
-  // Le lot affiché : le gain s'il y en a un, sinon un lot qu'on aurait pu gagner
-  const lot = gain || d.gains[h(d.gains.length)][0];
+/* ---- Le Banco : 6 montants, 3 identiques = gagné ---- */
+export interface ContenuBanco { cases: number[] }
+function banco(gain: number, h: Hasard, d: DefTicket): ContenuBanco {
+  const lots = lotsDe(d);
   for (;;) {
-    const g: SymboleMorpion[] = Array.from({ length: 9 }, () => (['♣', '✕', '○'] as const)[h(3)]);
-    if (gain) { const l = LIGNES[h(LIGNES.length)]; l.forEach((i) => (g[i] = '♣')); }
-    const n = lignesMorpion(g).length;
-    if (gain ? n === 1 : n === 0) return { grille: g, lot };
+    let cases: number[];
+    if (gain) {
+      const autres = lots.filter((l) => l !== gain);
+      cases = [gain, gain, gain, piocher(autres, h), piocher(autres, h), piocher(autres, h)];
+    } else cases = Array.from({ length: 6 }, () => piocher(lots, h));
+    cases = melanger(cases, h);
+    if (gainBanco(cases) === gain) return { cases };
   }
 }
+const gainBanco = (cases: number[]) => {
+  const n = new Map<number, number>(); cases.forEach((c) => n.set(c, (n.get(c) ?? 0) + 1));
+  const gagnants = [...n].filter(([, k]) => k >= 3).map(([c]) => c);
+  return gagnants.length === 1 ? gagnants[0] : gagnants.length ? -1 : 0;
+};
 
-/* ---- Numéros Gagnants ---- */
-function numeros(gain: number, h: Hasard, d: DefTicket) {
-  const tous = melanger(Array.from({ length: 30 }, (_, i) => i + 1), h);
-  const gagnants = tous.slice(0, 2);
-  const autres = tous.slice(2);
-  const leurres = d.gains.map(([g]) => g);
-  const mes = Array.from({ length: 8 }, (_, i) => ({ n: autres[i], lot: leurres[h(leurres.length)] }));
-  if (gain) { const i = h(8); mes[i] = { n: gagnants[h(2)], lot: gain }; }
-  return { gagnants, mes };
+/* ---- Le Coffre : 3 numéros gagnants, 10 lingots ---- */
+export interface ContenuCoffre { gagnants: number[]; lingots: { n: number; lot: number }[] }
+function coffre(gain: number, h: Hasard, d: DefTicket): ContenuCoffre {
+  const tous = melanger(Array.from({ length: 40 }, (_, i) => i + 1), h);
+  const gagnants = tous.slice(0, 3), autres = tous.slice(3);
+  const lots = lotsDe(d);
+  const lingots = Array.from({ length: 10 }, (_, i) => ({ n: autres[i], lot: piocher(lots, h) }));
+  if (gain) lingots[h(10)] = { n: piocher(gagnants, h), lot: gain };
+  return { gagnants, lingots };
 }
 
-/* ---- Mots Croisés ---- */
-export const MOTS = ['CLUB', 'CARTE', 'POKER', 'JETON', 'ROUGE', 'NOIR', 'TAPIS', 'MISE', 'GAIN', 'ROI', 'DAME', 'BILLE', 'PIQUE', 'COEUR', 'TREFLE', 'DES', 'AS', 'PARI', 'SORT', 'RIRE', 'TOUR', 'ROSE', 'NOTE', 'TRIO', 'PORTE', 'SOIR', 'LUNE', 'ETOILE', 'TIGRE', 'OSER', 'RIEN', 'PRIME', 'SOLEIL', 'MARIN', 'TRESOR', 'PIRATE', 'ROTI', 'TROU', 'POIRE', 'PISTE', 'SIESTE', 'STOP', 'TOPS'];
-export const motForme = (mot: string, lettres: string[]) => [...mot].every((c) => lettres.includes(c));
-const ALPHABET = 'ABCDEFGHIJKLMNOPRSTUVZ';
-
-function mots(gain: number, h: Hasard, d: DefTicket) {
-  // Nombre de mots formés : 2 à 6 selon le lot (0 ou 1 quand c'est perdu)
-  const k = gain ? 2 + d.gains.findIndex(([g]) => g === gain) : h(2);
-  for (let essai = 0; essai < 5000; essai++) {
-    const choisis: string[] = [];
-    let lettres = new Set<string>();
-    const pool = melanger(MOTS, h);
-    // Des mots qui partagent beaucoup de lettres, pour que k mots tiennent en 14 lettres
-    choisis.push(pool[0]); [...pool[0]].forEach((c) => lettres.add(c));
-    while (choisis.length < k) {
-      const restants = pool.filter((m) => !choisis.includes(m)).sort((a, b) => [...new Set(a)].filter((c) => !lettres.has(c)).length - [...new Set(b)].filter((c) => !lettres.has(c)).length);
-      const m = restants[h(Math.min(3, restants.length))];
-      choisis.push(m); [...m].forEach((c) => lettres.add(c));
-    }
-    if (k === 0) lettres = new Set();
-    if (lettres.size > 14) continue;
-    const autres = pool.filter((m) => !choisis.includes(m) && !motForme(m, [...lettres])).slice(0, 6 - choisis.length);
-    const liste = [...lettres];
-    let garde = 0;
-    while (liste.length < 14 && garde++ < 200) {
-      const c = ALPHABET[h(ALPHABET.length)];
-      if (liste.includes(c)) continue;
-      if (autres.some((m) => motForme(m, [...liste, c]))) continue;
-      liste.push(c);
-    }
-    const affiches = melanger([...choisis, ...autres], h);
-    if (liste.length === 14 && affiches.length === 6 && affiches.filter((m) => motForme(m, liste)).length === Math.max(k, 0)) {
-      return { lettres: melanger(liste, h), mots: affiches };
-    }
+/* ---- Trèfle Cash : 5 numéros gagnants, 20 numéros, ♣ = gagné direct ---- */
+export const LOTS_TREFLE = [20, 50, 100, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 250_000];
+export interface ContenuTrefle { gagnants: number[]; cases: { n: number | null; lot: number }[] }
+function trefle(gain: number, h: Hasard): ContenuTrefle {
+  const tous = melanger(Array.from({ length: 40 }, (_, i) => i + 1), h);
+  const gagnants = tous.slice(0, 5), autres = tous.slice(5);
+  const cases: ContenuTrefle['cases'] = Array.from({ length: 20 }, (_, i) => ({ n: autres[i], lot: piocher(LOTS_TREFLE, h) }));
+  if (gain) {
+    // Le gain tombe sur une case, ou se partage en deux quand c'est possible
+    const parts = gain >= 2_000 && LOTS_TREFLE.includes(gain / 2) && h(2) ? [gain / 2, gain / 2] : [gain];
+    const places = melanger(Array.from({ length: 20 }, (_, i) => i), h);
+    parts.forEach((lot, k) => { cases[places[k]] = { n: h(3) ? piocher(gagnants, h) : null, lot }; });
   }
-  throw new Error('Ticket Mots Croisés impossible à fabriquer');
+  return { gagnants, cases };
+}
+
+/* ---- Le Millionnaire : 3 jeux sur un ticket ---- */
+export const SYMBOLES_MILLION = ['💎', '🍒', '🔔', '⭐', '🍀', '7️⃣'];
+export interface ContenuMillionnaire {
+  symboles: { cases: string[]; lot: number };
+  duel: { mes: number[]; sien: number; lot: number };
+  couronne: { cases: string[]; lot: number };
+}
+function millionnaire(gain: number, h: Hasard, d: DefTicket): ContenuMillionnaire {
+  const lots = lotsDe(d).filter((l) => l < 200_000);
+  // Le gros lot se gagne à la couronne, les autres à l'un des deux premiers jeux
+  const jeu = !gain ? -1 : gain >= 200_000 ? 2 : h(2);
+  const lot = (j: number) => (j === jeu ? gain : j === 2 ? piocher([200_000, 1_000_000], h) : piocher(lots, h));
+  // Jeu 1 : trois symboles
+  let cases1: string[];
+  if (jeu === 0) { const s = piocher(SYMBOLES_MILLION, h); cases1 = [s, s, s]; }
+  else do { cases1 = Array.from({ length: 3 }, () => piocher(SYMBOLES_MILLION, h)); } while (cases1[0] === cases1[1] && cases1[1] === cases1[2]);
+  // Jeu 2 : un de mes numéros plus grand que le sien
+  let mes: number[], sien: number;
+  do {
+    sien = 5 + h(20);
+    mes = Array.from({ length: 3 }, () => 1 + h(30));
+  } while ((jeu === 1) !== mes.some((n) => n > sien) || mes.includes(sien));
+  // Jeu 3 : la couronne
+  const decor = ['🪙', '💰', '🎩', '🍾', '🏆'];
+  const cases3 = Array.from({ length: 6 }, () => piocher(decor, h));
+  if (jeu === 2) cases3[h(6)] = '👑';
+  return { symboles: { cases: cases1, lot: lot(0) }, duel: { mes, sien, lot: lot(1) }, couronne: { cases: cases3, lot: lot(2) } };
 }
 
 export interface Ticket { type: TypeTicket; gain: number; contenu: unknown }
@@ -116,17 +135,30 @@ export interface Ticket { type: TypeTicket; gain: number; contenu: unknown }
 export function fabriquerTicket(type: TypeTicket, h: Hasard): Ticket {
   const d = TICKETS[type];
   const gain = tirerGain(d, h);
-  const contenu = type === 'morpion' ? morpion(gain, h, d) : type === 'numeros' ? numeros(gain, h, d) : mots(gain, h, d);
+  const contenu = type === 'banco' ? banco(gain, h, d) : type === 'coffre' ? coffre(gain, h, d) : type === 'trefle' ? trefle(gain, h) : millionnaire(gain, h, d);
   return { type, gain, contenu };
 }
 
 /** Recalcule le gain d'après le contenu : le contenu fait foi, c'est ce que voit le joueur. */
 export function gainDuContenu(t: Ticket): number {
-  if (t.type === 'morpion') { const c = t.contenu as ReturnType<typeof morpion>; return lignesMorpion(c.grille).length ? c.lot : 0; }
-  if (t.type === 'numeros') { const c = t.contenu as ReturnType<typeof numeros>; return c.mes.filter((m) => c.gagnants.includes(m.n)).reduce((s, m) => s + m.lot, 0); }
-  const c = t.contenu as ReturnType<typeof mots>;
-  const n = c.mots.filter((m) => motForme(m, c.lettres)).length;
-  return n >= 2 ? TICKETS.mots.gains[n - 2][0] : 0;
+  if (t.type === 'banco') return Math.max(0, gainBanco((t.contenu as ContenuBanco).cases));
+  if (t.type === 'coffre') { const c = t.contenu as ContenuCoffre; return c.lingots.filter((l) => c.gagnants.includes(l.n)).reduce((s, l) => s + l.lot, 0); }
+  if (t.type === 'trefle') { const c = t.contenu as ContenuTrefle; return c.cases.filter((x) => x.n === null || c.gagnants.includes(x.n)).reduce((s, x) => s + x.lot, 0); }
+  const c = t.contenu as ContenuMillionnaire;
+  const [a, b, x] = c.symboles.cases;
+  return (a === b && b === x ? c.symboles.lot : 0) + (c.duel.mes.some((n) => n > c.duel.sien) ? c.duel.lot : 0) + (c.couronne.cases.includes('👑') ? c.couronne.lot : 0);
+}
+
+/** Les cases gagnantes d'un ticket (pour les faire briller une fois grattées). */
+export function casesGagnantes(t: Ticket): string[] {
+  if (t.type === 'banco') { const c = t.contenu as ContenuBanco; const g = gainBanco(c.cases); return c.cases.flatMap((v, i) => (v === g ? [`c${i}`] : [])); }
+  if (t.type === 'coffre') { const c = t.contenu as ContenuCoffre; return c.lingots.flatMap((l, i) => (c.gagnants.includes(l.n) ? [`l${i}`] : [])); }
+  if (t.type === 'trefle') { const c = t.contenu as ContenuTrefle; return c.cases.flatMap((x, i) => (x.n === null || c.gagnants.includes(x.n) ? [`c${i}`] : [])); }
+  const c = t.contenu as ContenuMillionnaire, r: string[] = [];
+  const [a, b, x] = c.symboles.cases; if (a === b && b === x) r.push('s0', 's1', 's2');
+  c.duel.mes.forEach((n, i) => { if (n > c.duel.sien) r.push(`d${i}`); });
+  c.couronne.cases.forEach((s, i) => { if (s === '👑') r.push(`k${i}`); });
+  return r;
 }
 
 /* ================================ Keno ================================ */

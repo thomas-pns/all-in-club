@@ -23,20 +23,20 @@ describe('Kiosque (serveur)', () => {
     const { k, porte } = creer();
     let attendu = SOLDE_DEPART;
     for (let i = 0; i < 30; i++) {
-      const r = k.acheterTicket(1, 'morpion');
-      attendu += r.gain - TICKETS.morpion.prix;
+      const r = k.acheterTicket(1, 'banco');
+      attendu += r.gain - TICKETS.banco.prix;
       expect(r.etat.solde).toBe(attendu);
     }
     expect(porte.etat(1).solde).toBe(attendu);
   });
 
-  it('utilise les tickets offerts (Morpion seulement)', () => {
+  it('utilise les tickets offerts (Banco seulement)', () => {
     const { k, porte, db } = creer();
-    expect(() => k.acheterTicket(1, 'morpion', true)).toThrow('Aucun ticket');
+    expect(() => k.acheterTicket(1, 'banco', true)).toThrow('Aucun ticket');
     porte.etat(1);
     db.prepare('UPDATE portefeuilles SET tickets = 1 WHERE utilisateur = 1').run();
-    expect(() => k.acheterTicket(1, 'mots', true)).toThrow('Morpion');
-    const r = k.acheterTicket(1, 'morpion', true);
+    expect(() => k.acheterTicket(1, 'coffre', true)).toThrow('Banco');
+    const r = k.acheterTicket(1, 'banco', true);
     expect(r.etat.tickets).toBe(0);
     expect(r.etat.solde).toBe(SOLDE_DEPART + r.gain);
   });
@@ -44,7 +44,7 @@ describe('Kiosque (serveur)', () => {
   it('refuse un achat sans assez de Clubs', () => {
     const { k, porte } = creer();
     porte.crediter(1, -SOLDE_DEPART + 100, 'Test');
-    expect(() => k.acheterTicket(1, 'mots')).toThrow('Pas assez');
+    expect(() => k.acheterTicket(1, 'millionnaire')).toThrow('Pas assez');
   });
 
   it('joue une grille de Keno, tire au bon moment et paie', () => {

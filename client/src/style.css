@@ -907,3 +907,191 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .table-lots small { color: var(--doux); }
 .mes-numeros span b:empty { min-height: 26px; }
 .nowrap { white-space: nowrap; }
+
+/* ======================= La rue du Club ======================= */
+.rue-cadre { position: relative; margin: 0 -16px 12px; }
+.rue-defile { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; border-top: 3px solid var(--trait); border-bottom: 3px solid var(--trait); }
+.rue-defile::-webkit-scrollbar { display: none; }
+.scene-rue { display: block; height: clamp(220px, calc(100vw * .62), 250px); width: auto; aspect-ratio: 1100 / 340; }
+@media (min-width: 760px) { .scene-rue { height: clamp(300px, 42vh, 400px); } }
+@media (min-width: 760px) { .rue-cadre { margin: 0 0 14px; } .rue-defile { border: 3px solid var(--trait); border-radius: 24px; box-shadow: 0 6px 0 var(--trait); } }
+.indice-defile { position: absolute; right: 10px; top: 22%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; background: rgba(42,30,63,.85); color: var(--creme); border: 2.5px solid var(--creme); font-size: 26px; font-weight: 800; line-height: 1; cursor: pointer; animation: pousse 1.6s ease-in-out infinite; transition: opacity .3s; }
+.indice-defile.cache { opacity: 0; pointer-events: none; }
+@keyframes pousse { 0%, 100% { transform: translate(0, -50%); } 50% { transform: translate(5px, -50%); } }
+.scene-rue .lieu { cursor: pointer; }
+.scene-rue .lieu:focus-visible, .scene-rue .porte-casino:focus-visible { outline: 3px solid var(--or); }
+.scene-rue .lieu:hover > path:first-child { filter: brightness(1.08); }
+.scene-rue .porte-casino { cursor: pointer; }
+.scene-rue .porte-casino:hover > path:first-child { fill: #FFE7A0; }
+.scene-rue .porte-casino:active { transform: translateY(2px); }
+/* Entrée : les bâtiments sortent de terre l'un après l'autre */
+.scene-rue .entree { transform-box: fill-box; transform-origin: 50% 100%; animation: surgit .7s cubic-bezier(.3,1.5,.5,1) both; animation-delay: var(--d); }
+@keyframes surgit { from { transform: translateY(40px) scaleY(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.scene-rue .scintille { animation: scintille 2.4s ease-in-out infinite; }
+.scene-rue .scintille.lent { animation-duration: 4.2s; }
+.scene-rue .neon { animation: neon 3.4s steps(1) infinite; }
+.scene-rue .neon.lent { animation-duration: 5.6s; }
+.scene-rue .ampoule { animation: ampoule .9s steps(1) infinite; }
+.scene-rue .pulse { animation: scintille 3s ease-in-out infinite; }
+.scene-rue .clignote { animation: scintille .8s steps(1) infinite; }
+.scene-rue .clignote.lent { animation-duration: 1.3s; }
+.scene-rue .tourne { animation: tourne-roue 40s linear infinite; }
+@keyframes tourne-roue { to { transform: rotate(360deg); } }
+.scene-rue .balance { animation: lanterne 3s ease-in-out infinite; }
+.scene-rue .pote { animation: hoche 2.4s ease-in-out infinite; }
+@keyframes hoche { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-3px); } }
+.scene-rue .nuage { animation: nuage-rue 40s linear infinite; }
+@keyframes nuage-rue { from { transform: translateX(-160px); } to { transform: translateX(1200px); } }
+.scene-rue .avion { animation: avion 26s linear infinite; animation-delay: -6s; }
+@keyframes avion { 0% { transform: translateX(-150px); } 70%, 100% { transform: translateX(1260px); } }
+.scene-rue .montgolfiere { animation: flotte-ballon 9s ease-in-out infinite; }
+@keyframes flotte-ballon { 0%, 100% { translate: 0 0; } 50% { translate: 30px -10px; } }
+.scene-rue .oiseau { animation: oiseau 18s linear infinite; }
+@keyframes oiseau { from { transform: translate(-60px, 0); } to { transform: translate(1180px, -30px); } }
+.scene-rue .filante { animation: filante 7s ease-in infinite; opacity: 0; }
+@keyframes filante { 0%, 80% { transform: translate(200px, 10px); opacity: 0; } 82% { opacity: 1; } 92% { transform: translate(420px, 90px); opacity: 0; } 100% { opacity: 0; } }
+.scene-rue .vehicule { animation-timing-function: linear; animation-iteration-count: infinite; }
+.scene-rue .vehicule.droite { animation-name: roule-droite; }
+.scene-rue .vehicule.gauche { animation-name: roule-gauche; }
+@keyframes roule-droite { 0% { transform: translateX(-180px); } 34%, 100% { transform: translateX(1280px); } }
+@keyframes roule-gauche { 0% { transform: translateX(1280px); } 34%, 100% { transform: translateX(-180px); } }
+.scene-rue .fumee { animation: scintille .5s steps(1) infinite; }
+.scene-rue .bulle-roue { opacity: 0; transform-box: fill-box; transform-origin: 20% 100%; transition: opacity .3s; }
+.scene-rue.roue-dispo .bulle-roue { opacity: 1; animation: appel-bulle 1.8s ease-in-out infinite; }
+@keyframes appel-bulle { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.08) rotate(-2deg); } }
+@media (prefers-reduced-motion: reduce) { .scene-rue *, .indice-defile { animation: none !important; } }
+
+/* Bandeau des gros gains */
+.bandeau-annonces { overflow: hidden; background: var(--or); color: var(--trait); border: 3px solid var(--trait); border-radius: 14px; box-shadow: 0 4px 0 var(--trait); margin-bottom: 12px; padding: 7px 0; font-weight: 800; font-size: 14px; white-space: nowrap; }
+.bandeau-annonces .defile { display: inline-flex; gap: 14px; padding-left: 100%; animation: defile 24s linear infinite; }
+.bandeau-annonces .defile i { font-style: normal; opacity: .45; }
+@keyframes defile { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+.banniere-annonce { position: fixed; z-index: 60; left: 50%; top: calc(10px + env(safe-area-inset-top)); transform: translateX(-50%); max-width: min(92vw, 520px); background: var(--or); color: var(--trait); border: 3px solid var(--trait); border-radius: 16px; box-shadow: 0 5px 0 var(--trait); padding: 9px 14px; font-weight: 800; font-size: 14.5px; text-align: center; animation: descend .45s cubic-bezier(.3,1.5,.5,1); transition: opacity .45s, transform .45s; }
+.banniere-annonce.mission { background: #5BE38B; }
+.banniere-annonce.part { opacity: 0; transform: translate(-50%, -20px); }
+@keyframes descend { from { transform: translate(-50%, -60px); } to { transform: translate(-50%, 0); } }
+
+/* Missions du jour */
+.missions-carte { background: var(--nuit2); border: 3px solid var(--trait); border-radius: 20px; box-shadow: 0 5px 0 var(--trait); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.missions-carte:empty { display: none; }
+.entete-missions { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.entete-missions b { font-family: Fredoka; font-weight: 600; font-size: 19px; }
+.entete-missions small { font-size: 12.5px; font-weight: 800; color: var(--doux); text-align: right; }
+.mission { display: flex; align-items: center; gap: 10px; }
+.mission .coche { width: 28px; height: 28px; flex: none; border-radius: 50%; border: 2.5px solid var(--trait); background: var(--nuit3); display: grid; place-items: center; font-weight: 800; }
+.mission.faite .coche { background: #43B072; animation: tinte .5s cubic-bezier(.3,1.6,.5,1); }
+.mission .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.mission .txt b { font-size: 14.5px; }
+.mission.faite .txt b { text-decoration: line-through; opacity: .6; }
+.mission .barre { height: 8px; border-radius: 4px; background: var(--nuit); overflow: hidden; }
+.mission .barre i { display: block; height: 100%; background: var(--or); border-radius: 4px; transition: width .6s; }
+.mission.faite .barre i { background: #43B072; }
+.mission .recompense { text-align: right; font-size: 12px; font-weight: 800; color: var(--doux); white-space: nowrap; }
+.mission .recompense b { font-family: Fredoka; font-weight: 600; font-size: 14px; color: var(--or); }
+.bonus-missions { margin: 0; text-align: center; font-size: 12.5px; font-weight: 800; color: var(--doux); }
+.annonce .mini-roue { width: 42px; height: 42px; flex: none; border-radius: 50%; border: 3px solid var(--trait); background: conic-gradient(#FF6B5B 0 30deg, #FFC23D 0 60deg, #46C2F0 0 90deg, #43B072 0 120deg, #8E5BD6 0 150deg, #FF9AC1 0 180deg, #FF6B5B 0 210deg, #FFC23D 0 240deg, #46C2F0 0 270deg, #43B072 0 300deg, #8E5BD6 0 330deg, #FF9AC1 0); animation: tourne-roue 6s linear infinite; position: relative; }
+.annonce .mini-roue i { position: absolute; inset: 13px; border-radius: 50%; background: var(--creme); border: 2px solid var(--trait); }
+
+/* Le salon Entre potes et le choix du jeu */
+.choix-salon { display: flex; flex-direction: column; gap: 10px; }
+.choix-jeux { display: flex; flex-direction: column; gap: 10px; }
+.choix-jeux .btn { justify-content: flex-start; gap: 10px; }
+.table-salon { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: var(--nuit2); color: var(--creme); border: 2.5px solid var(--trait); border-radius: 14px; padding: 9px 12px; margin-bottom: 8px; cursor: pointer; font: inherit; }
+.table-salon small { color: var(--doux); font-weight: 800; }
+
+/* La Grande Roue */
+.voile-roue { z-index: 45; }
+.roue-ecran { width: min(440px, 100%); max-height: calc(100dvh - 24px); overflow-y: auto; background: radial-gradient(ellipse at 50% 35%, #4B2380, #1B1238); color: var(--creme); border: 3px solid var(--trait); border-radius: 26px; padding: 14px 16px 16px; box-shadow: 0 8px 0 var(--trait); }
+.roue-svg { display: block; width: min(320px, 100%); margin: 0 auto; }
+.roue-svg .aiguille { transform-box: fill-box; transform-origin: 50% 0; }
+.roue-svg .aiguille.tic { animation: tic .12s ease-out; }
+@keyframes tic { 50% { transform: rotate(-14deg); } }
+.voile-roue.tourne .ampoule-roue { animation: ampoule .25s steps(1) infinite; }
+.roue-svg .ampoule-roue { animation: ampoule 1s steps(1) infinite; }
+.serie-roue { display: flex; gap: 5px; margin: 8px 0; }
+.serie-roue span { flex: 1; text-align: center; border: 2.5px solid var(--trait); border-radius: 10px; background: var(--nuit3); color: var(--doux); font-family: Fredoka; font-weight: 600; font-size: 13px; line-height: 1.15; padding: 4px 0; }
+.serie-roue span small { display: block; font-size: 11px; }
+.serie-roue span.fait { background: #43B072; color: var(--trait); }
+.serie-roue span.auj { background: var(--or); color: var(--trait); }
+.info-roue { text-align: center; font-weight: 800; font-size: 14px; margin: 6px 0 12px; min-height: 40px; }
+.info-roue small { font-size: 12px; color: var(--doux); }
+.resultat-roue { display: block; font-family: Fredoka; font-weight: 700; font-size: 28px; color: var(--or); animation: monte .4s cubic-bezier(.3,1.5,.5,1); }
+.resultat-roue.jackpot { font-size: 34px; animation: monte .4s cubic-bezier(.3,1.5,.5,1), jackpot 0.6s steps(1) 4; }
+@keyframes jackpot { 50% { color: #FF6BD5; } }
+.btn-lancer { font-size: 20px; min-height: 58px; }
+
+/* ======================= Les 4 tickets à gratter ======================= */
+.t-banco { background: radial-gradient(ellipse at 50% 20%, #4C8BE8, #1E4FA8); color: var(--creme); }
+.t-coffre { background: radial-gradient(ellipse at 50% 30%, #F0524F, #B81F2E); color: var(--creme); }
+.t-trefle { background: repeating-linear-gradient(120deg, #F59A2A 0 6px, #F2A73E 6px 12px); color: var(--trait); }
+.t-millionnaire { background: radial-gradient(ellipse at 50% 0%, #6B3FB0, #2A1650); color: var(--creme); }
+.ticket.t-banco b, .ticket-grand.t-banco .entete-ticket b { color: var(--or); text-shadow: 2px 2px 0 var(--trait); }
+.ticket.t-millionnaire b, .ticket-grand.t-millionnaire .entete-ticket b { color: #FFE27A; }
+.ticket-grand.t-trefle .entete-ticket b { color: var(--creme); text-shadow: 2px 2px 0 var(--trait); }
+.ticket-grand .jeu-ticket:has(.coffre-fort), .ticket-grand .jeu-ticket:has(.cadre-trefle), .ticket-grand .jeu-ticket:has(.jeu-million) { background: none; border: none; padding: 0; color: inherit; }
+.btn-regles { background: #5A4A8C; color: var(--creme); }
+.ticket-grand .gagnante { animation: tinte .5s cubic-bezier(.3,1.6,.5,1); }
+
+/* Le Banco */
+.grille-banco { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.grille-banco span { height: 92px; border-radius: 16px; border: 3px solid var(--trait); background: #fff; color: var(--trait); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.grille-banco b { font-family: Fredoka; font-size: 26px; line-height: 1; } .grille-banco small { font-weight: 800; }
+.grille-banco span.gagnante { background: var(--or); box-shadow: 0 0 0 3px var(--creme); }
+
+/* Le Coffre */
+.coffre-fort { position: relative; padding: 0 30px; }
+.coffre-fort .porte-g, .coffre-fort .porte-d { position: absolute; top: 4px; bottom: 4px; width: 30px; background: linear-gradient(90deg, #9AA3B8, #E4E8F0, #9AA3B8); border: 3px solid var(--trait); }
+.coffre-fort .porte-g { left: 0; clip-path: polygon(0 0, 100% 6%, 100% 94%, 0 100%); border-radius: 6px 0 0 6px; }
+.coffre-fort .porte-d { right: 0; clip-path: polygon(0 6%, 100% 0, 100% 100%, 0 94%); border-radius: 0 6px 6px 0; }
+.coffre-fort .interieur { background: #3A3150; border: 8px solid #C7CCD8; outline: 3px solid var(--trait); border-radius: 10px; padding: 8px 8px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.etiquette-coffre { background: #E5484D; color: var(--creme); border: 2.5px solid var(--trait); border-radius: 8px; padding: 1px 10px; font-family: Fredoka; font-weight: 700; font-size: 13px; }
+.piles { display: flex; gap: 14px; justify-content: center; }
+.pile { position: relative; width: 62px; height: 64px; }
+.pile i { position: absolute; left: 4px; right: 4px; height: 14px; border-radius: 50%; background: #FFC23D; border: 2px solid var(--trait); box-shadow: inset 0 -4px 0 #E59A12; }
+.pile i:nth-child(1) { bottom: 0; } .pile i:nth-child(2) { bottom: 9px; } .pile i:nth-child(3) { bottom: 18px; }
+.pile b { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 40px; height: 40px; border-radius: 50%; background: var(--creme); color: var(--trait); border: 2.5px solid var(--trait); display: grid; place-items: center; font-family: Fredoka; font-size: 19px; }
+.pile b.gagnante { background: #5BE38B; }
+.etagere { align-self: stretch; height: 8px; background: #C7CCD8; border: 2px solid var(--trait); margin: 2px -8px; }
+.lingots { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.lingots > div { display: flex; gap: 5px; }
+.lingot { width: 62px; height: 40px; border-radius: 6px 6px 3px 3px; background: linear-gradient(#FFE27A 0 22%, #FFC23D 22%); border: 2.5px solid var(--trait); color: var(--trait); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%); }
+.lingot b { font-family: Fredoka; font-size: 16px; } .lingot small { font-size: 9.5px; font-weight: 800; }
+.lingot.gagnante { background: linear-gradient(#9FF0B8 0 22%, #43B072 22%); }
+@media (max-width: 380px) { .lingot { width: 54px; } .coffre-fort { padding: 0 22px; } .coffre-fort .porte-g, .coffre-fort .porte-d { width: 22px; } }
+
+/* Trèfle Cash */
+.trefle-haut { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.logo-trefle { font-family: Fredoka; font-weight: 700; font-size: 30px; line-height: .95; color: var(--creme); text-shadow: 2px 2px 0 var(--trait); }
+.logo-trefle em { font-style: normal; color: #1F5C5A; text-shadow: 2px 2px 0 var(--creme); }
+.chance-trefle { width: 92px; height: 92px; flex: none; border-radius: 50%; background: #1F5C5A; border: 4px solid var(--or); box-shadow: 0 4px 0 var(--trait); color: var(--creme); display: flex; flex-direction: column; justify-content: center; text-align: center; font-family: Fredoka; font-weight: 700; font-size: 11px; line-height: 1.15; }
+.chance-trefle b { color: var(--or); font-size: 12.5px; }
+.cadre-trefle { background: #17403F; border: 3px solid var(--or); border-radius: 14px; padding: 6px 8px 8px; box-shadow: 0 4px 0 var(--trait); color: var(--creme); }
+.titre-cadre { display: block; text-align: center; font-family: Fredoka; font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+.etoiles-trefle { display: flex; justify-content: space-between; }
+.etoile-trefle { width: 54px; height: 52px; background: var(--or); clip-path: polygon(50% 0, 63% 33%, 98% 36%, 71% 58%, 80% 95%, 50% 75%, 20% 95%, 29% 58%, 2% 36%, 37% 33%); display: grid; place-items: center; }
+.etoile-trefle b { font-family: Fredoka; font-size: 17px; color: var(--trait); margin-top: 6px; }
+.etoile-trefle.gagnante { background: #5BE38B; }
+.grille-trefle { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.grille-trefle span { height: 50px; border-radius: 9px; border: 2px solid var(--trait); background: #1F5C5A; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+.grille-trefle b { font-family: Fredoka; font-size: 19px; }
+.grille-trefle small { font-size: 9px; font-weight: 800; background: #46C2C0; color: var(--trait); border-radius: 3px; padding: 0 3px; margin-top: 3px; min-height: 11px; }
+.grille-trefle span.trefle-direct b { color: #5BE38B; font-size: 24px; }
+.grille-trefle span.gagnante { background: var(--or); color: var(--trait); box-shadow: 0 0 0 2px var(--creme); }
+.grille-trefle span.gagnante.trefle-direct b { color: #25A05C; }
+
+/* Le Millionnaire */
+.bandeau-million { text-align: center; background: linear-gradient(#FFE27A, #E59A12); color: var(--trait); border: 3px solid var(--trait); border-radius: 12px; font-family: Fredoka; font-weight: 700; font-size: 19px; padding: 3px; box-shadow: 0 4px 0 var(--trait); }
+.jeu-million { background: var(--creme); color: var(--trait); border: 3px solid var(--trait); border-radius: 14px; padding: 7px 9px; box-shadow: 0 4px 0 var(--trait); }
+.titre-jeu { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.titre-jeu b { font-family: Fredoka; font-size: 14.5px; } .titre-jeu small { font-weight: 800; opacity: .75; white-space: nowrap; }
+.cases-million { display: grid; gap: 6px; flex: 1; }
+.cases-million.trois { grid-template-columns: repeat(3, 1fr); } .cases-million.six { grid-template-columns: repeat(6, 1fr); }
+.cases-million span, .duel-million .sien { height: 44px; border-radius: 10px; border: 2px solid var(--trait); background: #fff; display: grid; place-items: center; font-size: 22px; }
+.cases-million b, .duel-million b { font-family: Fredoka; font-size: 20px; }
+.duel-million { display: flex; align-items: center; gap: 8px; }
+.duel-million em { font-style: normal; font-weight: 800; font-size: 13px; }
+.duel-million .sien { width: 54px; background: #FFD0C8; }
+.cases-million span.gagnante { background: var(--or); }
+.ticket-grand.t-trefle .entete-ticket b { visibility: hidden; }
+.ticket-grand.t-trefle .entete-ticket { margin-bottom: -46px; position: relative; z-index: 1; }
+.ticket-grand.t-trefle .regle-ticket { order: 5; }
