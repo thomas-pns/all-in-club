@@ -3,6 +3,7 @@ import { ouvrirBase } from '../base.js';
 import { Portefeuilles } from '../portefeuille.js';
 import { Activites } from '../activites.js';
 import { migrer } from '../donnees.js';
+import { Kiosque } from '../kiosque.js';
 import { missionsDuJour } from '../../moteur/missions.js';
 import { SOLDE_DEPART, jourParis } from '../../moteur/bonus.js';
 
@@ -52,5 +53,24 @@ describe('Missions du jour', () => {
     expect(vues).toEqual(['leo a gagné 50 000 ♣ au Coffre']);
     expect(a.annonces()[0]).toMatchObject({ pseudo: 'leo', montant: 50_000 });
     expect(jourParis(Date.now())).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('ne compte un ticket qu\'une fois gratté (rien ne trahit le gain avant)', () => {
+    const { a, porte } = creer();
+    const db = (a as unknown as { db: any }).db;
+    let g = 7;
+    const k = new Kiosque(db, porte, () => Date.UTC(2026, 10, 5, 10), (n) => { g = (g * 1103515245 + 12345) & 0x7fffffff; return g % n; });
+    k.activites = a;
+    const signale: string[] = [];
+    const vrai = a.signaler.bind(a);
+    a.signaler = (u, act, n) => { signale.push(act); vrai(u, act, n); };
+    const r = k.acheterTicket(1, 'banco');
+    expect(signale).toEqual([]);
+    k.ticketVu(1, r.id);
+    k.ticketVu(1, r.id);
+    expect(signale.filter((x) => x === 'ticket')).toHaveLength(1);
+    // Le ticket d'un autre ne compte pas
+    k.ticketVu(2, r.id);
+    expect(signale.filter((x) => x === 'ticket')).toHaveLength(1);
   });
 });

@@ -8,7 +8,7 @@ import type { ContenuBanco, ContenuCoffre, ContenuTrefle, ContenuMillionnaire } 
 import { api, ErreurApi } from '../reseau';
 import { fmt } from '../art/rendu';
 import { jouerSon } from '../vue/son';
-import { $, $$, esc, html, toast, panneau } from './commun';
+import { $, $$, esc, html, toast, panneau, suspense } from './commun';
 
 export interface EtatPortefeuille { solde: number; tickets: number }
 
@@ -70,7 +70,7 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   };
   tic();
   const m = setInterval(tic, 500);
-  ctx.nettoyer(() => clearInterval(m));
+  ctx.nettoyer(() => { clearInterval(m); suspense.kiosque = false; });
 }
 
 /* ============================ Ticket à gratter ============================ */
@@ -113,10 +113,12 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
   async function acheter(gratuit: boolean) {
     gratuitCourant = gratuit;
     const bj = $('[data-jouer]', c) as HTMLButtonElement | null; if (bj) bj.disabled = true;
+    // Rien ne doit trahir le résultat avant la dernière case grattée
+    suspense.kiosque = true;
     let r: ReponseTicket;
     try { r = await api<ReponseTicket>('/api/kiosque/ticket', { type, offert: gratuit }); }
-    catch (e) { erreur(e); if (bj) bj.disabled = false; return; }
-    if (!c.isConnected) return;
+    catch (e) { erreur(e); if (bj) bj.disabled = false; suspense.kiosque = false; return; }
+    if (!c.isConnected) { suspense.kiosque = false; return; }
     jouerSon('jeton');
     // Le gain est déjà crédité côté serveur : on garde le suspense jusqu'au grattage
     ctx.majPorte(r.etat, r.etat.solde - r.gain);
@@ -130,9 +132,13 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
     $('[data-regles]', c).onclick = () => ouvrirReglesTicket(type);
     const gagnantes = new Set(casesGagnantes({ type, gain: r.gain, contenu: r.contenu }));
     let fini = false;
+    // Le ticket est vu : le serveur compte les missions et annonce les gros gains à ce moment-là
+    const signalerVu = () => void api(`/api/kiosque/ticket/${r.id}/vu`, {}).catch(() => {});
+    ctx.nettoyer(() => { if (!fini) { fini = true; signalerVu(); } suspense.kiosque = false; });
     const reveler = () => {
       if (fini) return;
       fini = true;
+      signalerVu();
       const cv = $('canvas', zone) as HTMLCanvasElement | null;
       if (cv) { cv.style.transition = 'opacity .4s'; cv.style.opacity = '0'; setTimeout(() => cv.remove(), 420); }
       $$('[data-id]', zone).forEach((e) => e.classList.toggle('gagnante', gagnantes.has(e.dataset.id!)));
@@ -147,6 +153,8 @@ export function vueTicket(c: HTMLElement, ctx: ContexteKiosque, type: TypeTicket
         jouerSon('parole');
         ctx.majPorte(r.etat);
       }
+      // Le résultat est à l'écran : les notifications peuvent passer
+      suspense.kiosque = false;
       $('[data-actions]', c).innerHTML = `<button class="btn" data-kiosque>Le Kiosque</button><button class="btn btn-or" data-encore>Un autre ticket</button>`;
       $('[data-kiosque]', c).onclick = () => ctx.aller('kiosque');
       $('[data-encore]', c).onclick = () => { const offerts = ctx.porte()?.tickets ?? 0; presenter(type === 'banco' && offerts > 0); };
@@ -405,18 +413,19 @@ export function vueKeno(c: HTMLElement, ctx: ContexteKiosque) {
   /** Le tirage en direct : les 20 boules sortent une par une. */
   async function direct(id: number) {
     enDirect = true;
+    suspense.kiosque = true;
     let t: { numeros: number[] } | null = null;
     for (let i = 0; i < 8 && !t; i++) {
       try { t = (await api<{ tirage: { numeros: number[] } | null }>(`/api/kiosque/keno/${id}`)).tirage; } catch { /* réessayer */ }
       if (!t) await new Promise((r) => setTimeout(r, 1000));
     }
-    if (!t || !c.isConnected) { enDirect = false; return; }
+    if (!t || !c.isConnected) { enDirect = false; suspense.kiosque = false; return; }
     const ordre = t.numeros.slice().sort(() => Math.random() - 0.5);
     // Mes numéros joués pour ce tirage (ou ceux cochés à l'écran)
     const joues = etat?.grilles.filter((g) => g.tirage === id).flatMap((g) => g.numeros) ?? [];
     const mes = joues.length ? joues : choixKeno;
     for (let i = 1; i <= ordre.length; i++) {
-      if (!c.isConnected) return;
+      if (!c.isConnected) { suspense.kiosque = false; return; }
       afficherDernier(ordre.slice(0, i), `Tirage en direct · boule ${i} / 20`, mes);
       jouerSon(mes.includes(ordre[i - 1]) ? 'jeton' : 'clic');
       await new Promise((r) => setTimeout(r, 380));
@@ -425,6 +434,7 @@ export function vueKeno(c: HTMLElement, ctx: ContexteKiosque) {
     const p = await api<EtatPortefeuille>('/api/portefeuille').catch(() => null);
     if (p) ctx.majPorte(p);
     enDirect = false;
+    suspense.kiosque = false;
   }
 
   const tic = () => {
@@ -436,7 +446,7 @@ export function vueKeno(c: HTMLElement, ctx: ContexteKiosque) {
   };
   void charger();
   const m = setInterval(tic, 250);
-  ctx.nettoyer(() => clearInterval(m));
+  ctx.nettoyer(() => { clearInterval(m); suspense.kiosque = false; });
 }
 
 /* ================================ Loto Flash ================================ */
@@ -522,14 +532,15 @@ export function vueLoto(c: HTMLElement, ctx: ContexteKiosque) {
 
   async function direct(id: number) {
     enDirect = true;
+    suspense.kiosque = true;
     let t: { numeros: number[]; etoile: number } | null = null;
     for (let i = 0; i < 8 && !t; i++) {
       try { t = (await api<{ tirage: { numeros: number[]; etoile: number } | null }>(`/api/kiosque/loto/${id}`)).tirage; } catch { /* réessayer */ }
       if (!t) await new Promise((r) => setTimeout(r, 1000));
     }
-    if (!t || !c.isConnected) { enDirect = false; return; }
+    if (!t || !c.isConnected) { enDirect = false; suspense.kiosque = false; return; }
     for (let i = 1; i <= 6; i++) {
-      if (!c.isConnected) return;
+      if (!c.isConnected) { suspense.kiosque = false; return; }
       afficherDernier(t.numeros.slice(0, Math.min(i, 5)), i === 6 ? t.etoile : null, 'Tirage en direct !');
       jouerSon(i === 6 ? 'gagne' : 'jeton');
       await new Promise((r) => setTimeout(r, 900));
@@ -538,6 +549,7 @@ export function vueLoto(c: HTMLElement, ctx: ContexteKiosque) {
     const p = await api<EtatPortefeuille>('/api/portefeuille').catch(() => null);
     if (p) ctx.majPorte(p);
     enDirect = false;
+    suspense.kiosque = false;
   }
 
   const tic = () => {
@@ -549,5 +561,5 @@ export function vueLoto(c: HTMLElement, ctx: ContexteKiosque) {
   };
   void charger();
   const m = setInterval(tic, 250);
-  ctx.nettoyer(() => clearInterval(m));
+  ctx.nettoyer(() => { clearInterval(m); suspense.kiosque = false; });
 }

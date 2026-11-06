@@ -31,6 +31,8 @@ export class EcranTable {
   private scene: Scene | null = null;
   private file: Extract<MessageSalle, { type: 'maj' }>[] = [];
   private enCours = false;
+  /** Une animation est en cours (les notifications attendent). */
+  get occupe() { return this.enCours || this.file.length > 0; }
   private etat: VueSalle | null = null;
   private debrancher: () => void;
   private preAction: PreAction = null;

@@ -100,8 +100,8 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   app.post('/api/portefeuille/roue', async (req) => {
     const u = exigerUtilisateur(req).id;
     const r = portefeuilles.tournerRoue(u);
-    // Le jackpot est annoncé une fois la roue arrêtée
-    if (ROUE[r.segment].label === 'JACKPOT') setTimeout(() => activites.annoncer(u, `a décroché le JACKPOT de la Grande Roue : ${fmtClubs(r.clubs)} !`, r.clubs), 7_000).unref();
+    // Le gagnant ne reçoit pas sa propre annonce : il voit la roue s'arrêter sur le jackpot
+    if (ROUE[r.segment].label === 'JACKPOT') activites.annoncer(u, `a décroché le JACKPOT de la Grande Roue : ${fmtClubs(r.clubs)} !`, r.clubs);
     return r;
   });
   app.get('/api/missions', async (req) => activites.missions(exigerUtilisateur(req).id));
@@ -116,6 +116,7 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
     const b = (req.body ?? {}) as { type?: string; offert?: boolean };
     return kiosque.acheterTicket(exigerUtilisateur(req).id, String(b.type) as any, !!b.offert);
   });
+  app.post('/api/kiosque/ticket/:id/vu', async (req) => kiosque.ticketVu(exigerUtilisateur(req).id, Number((req.params as any).id)));
   app.get('/api/kiosque/keno', async (req) => kiosque.etatKeno(exigerUtilisateur(req).id));
   app.get('/api/kiosque/keno/:id', async (req) => { exigerUtilisateur(req); return { tirage: kiosque.tirageKeno(Number((req.params as any).id)) }; });
   app.post('/api/kiosque/keno', async (req) => { const b = (req.body ?? {}) as any; return kiosque.jouerKeno(exigerUtilisateur(req).id, b.numeros, b.mise, b.tirages); });

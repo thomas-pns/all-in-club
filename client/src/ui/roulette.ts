@@ -32,6 +32,8 @@ export class EcranRoulette {
   private scene: SceneRoulette | null = null;
   private file: Extract<MessageRoulette, { type: 'majRoulette' }>[] = [];
   private enCours = false;
+  /** Une animation est en cours (les notifications attendent). */
+  get occupe() { return this.enCours || this.file.length > 0; }
   private etat: VueRoulette | null = null;
   private debrancher: () => void;
   private detruit = false;

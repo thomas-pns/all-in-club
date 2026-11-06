@@ -31,6 +31,8 @@ export function migrerKiosque(db: Base) {
     CREATE TABLE IF NOT EXISTS loto_tirages (id INTEGER PRIMARY KEY, numeros TEXT NOT NULL, etoile INTEGER NOT NULL, cagnotte INTEGER NOT NULL, gagnants INTEGER NOT NULL, date INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS reglages_kiosque (cle TEXT PRIMARY KEY, valeur INTEGER NOT NULL);
   `);
+  const colonnes = (db.prepare('PRAGMA table_info(tickets)').all() as { name: string }[]).map((c) => c.name);
+  if (!colonnes.includes('vu')) db.exec('ALTER TABLE tickets ADD COLUMN vu INTEGER NOT NULL DEFAULT 0');
 }
 
 const hasardSur: Hasard = (n) => randomInt(n);
@@ -61,11 +63,22 @@ export class Kiosque {
     const t = fabriquerTicket(type, this.hasard);
     const id = Number(this.db.prepare('INSERT INTO tickets (utilisateur, date, type, prix, gain, json) VALUES (?, ?, ?, ?, ?, ?)').run(u, this.horloge(), type, offert ? 0 : d.prix, t.gain, JSON.stringify(t.contenu)).lastInsertRowid);
     if (t.gain) this.porte.crediter(u, t.gain, `Gain ${d.nom}`);
+    return { id, type, gain: t.gain, contenu: t.contenu, etat: this.porte.etat(u) };
+  }
+
+  /**
+   * Le joueur a fini de gratter (ou a quitté son ticket) : c'est seulement maintenant qu'on compte
+   * ses missions et qu'on annonce un gros gain, pour ne rien dévoiler avant qu'il l'ait vu.
+   */
+  ticketVu(u: number, id: number) {
+    const t = this.db.prepare('SELECT type, gain, vu FROM tickets WHERE id = ? AND utilisateur = ?').get(id, u) as { type: TypeTicket; gain: number; vu: number } | undefined;
+    if (!t || t.vu) return { ok: true };
+    this.db.prepare('UPDATE tickets SET vu = 1 WHERE id = ?').run(id);
+    const d = TICKETS[t.type];
     this.activites?.signaler(u, 'ticket');
     if (t.gain) this.activites?.signaler(u, 'ticketGagnant');
-    // Annoncé un peu plus tard : le temps de gratter, pour ne pas gâcher la surprise
-    if (t.gain >= d.prix * 10) this.plusTard(() => this.activites?.annoncer(u, `a gagné ${fmtClubs(t.gain)} au ${d.nom.replace(/^Le /, '')}`, t.gain), 20_000);
-    return { id, type, gain: t.gain, contenu: t.contenu, etat: this.porte.etat(u) };
+    if (d && t.gain >= d.prix * 10) this.activites?.annoncer(u, `a gagné ${fmtClubs(t.gain)} au ${d.nom.replace(/^Le /, '')}`, t.gain);
+    return { ok: true };
   }
 
   /* ----------------------------- Keno ----------------------------- */
@@ -100,8 +113,6 @@ export class Kiosque {
     this.activites?.signaler(u, 'keno');
     return { tirage: id, etat: this.porte.etat(u) };
   }
-
-  private plusTard(f: () => void, ms: number) { const m = setTimeout(f, ms); m.unref?.(); }
 
   /* ----------------------------- Loto Flash ----------------------------- */
 
@@ -161,7 +172,7 @@ export class Kiosque {
         const gain = gainKeno(JSON.parse(g.numeros), tirage, g.mise);
         this.db.prepare('UPDATE keno_grilles SET gain = ? WHERE id = ?').run(gain, g.id);
         if (gain) this.porte.crediter(g.utilisateur, gain, `Gain Keno n° ${id}`);
-        if (gain >= 2_000 && gain >= g.mise * 20) this.plusTard(() => this.activites?.annoncer(g.utilisateur, `a gagné ${fmtClubs(gain)} au Keno`, gain), 25_000);
+        if (gain >= 2_000 && gain >= g.mise * 20) this.activites?.annoncer(g.utilisateur, `a gagné ${fmtClubs(gain)} au Keno`, gain);
       }
     }
     // Loto Flash
@@ -179,7 +190,7 @@ export class Kiosque {
         const gain = !r ? 0 : r.gain === 'cagnotte' ? Math.floor(cagnotte / jackpot) : r.gain;
         this.db.prepare('UPDATE loto_grilles SET gain = ?, rang = ? WHERE id = ?').run(gain, r?.nom ?? null, g.id);
         if (gain) this.porte.crediter(g.utilisateur, gain, r?.gain === 'cagnotte' ? `Cagnotte du Loto Flash !` : `Gain Loto Flash n° ${id}`);
-        if (gain >= 10_000) this.plusTard(() => this.activites?.annoncer(g.utilisateur, r?.gain === 'cagnotte' ? `a décroché la cagnotte du Loto Flash : ${fmtClubs(gain)} !` : `a gagné ${fmtClubs(gain)} au Loto Flash`, gain), 25_000);
+        if (gain >= 10_000) this.activites?.annoncer(g.utilisateur, r?.gain === 'cagnotte' ? `a décroché la cagnotte du Loto Flash : ${fmtClubs(gain)} !` : `a gagné ${fmtClubs(gain)} au Loto Flash`, gain);
       }
       if (jackpot) this.fixerCagnotte(LOTO.cagnotteDepart);
       this.db.prepare('INSERT INTO loto_tirages (id, numeros, etoile, cagnotte, gagnants, date) VALUES (?, ?, ?, ?, ?, ?)').run(id, JSON.stringify(tirage.numeros), tirage.etoile, cagnotte, rangs.filter((x) => x.r).length, t);

@@ -23,8 +23,8 @@ import { EcranRoulette, CanalRoulette } from './ui/roulette';
 import { SalleRoulette, ReglagesRoulette, MessageRoulette } from '../../moteur/roulette/salleRoulette';
 import { EcranHall } from './ui/club';
 import type { JeuCasino } from './ui/ecrans';
-import { ecranConnexion, ecranReinitialiser, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces } from './ui/ecrans';
-import { toast, html, esc } from './ui/commun';
+import { ecranConnexion, ecranReinitialiser, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces, afficherBanniere } from './ui/ecrans';
+import { toast, html, esc, suspense } from './ui/commun';
 import { debloquerSon, reglerSon, jouerSon } from './vue/son';
 import { volumeMusique } from './vue/musique';
 import { lirePrefs, suivrePrefs, definirNotifications, ecrirePrefs } from './ui/commun';
@@ -104,13 +104,7 @@ function connecte(u: Utilisateur, jeton: string) {
   allerHall();
 }
 
-/** Une bannière qui glisse du haut de l'écran quelques secondes (gros gains, missions). */
-function bannierAnnonce(contenu: string, genre: 'gain' | 'mission' = 'gain') {
-  const b = html(`<div class="banniere-annonce ${genre}" role="status">${contenu}</div>`);
-  document.body.appendChild(b);
-  if (genre === 'mission') jouerSon('gagne');
-  setTimeout(() => { b.classList.add('part'); setTimeout(() => b.remove(), 500); }, 4200);
-}
+suspense.table = () => !!table?.occupe;
 
 function surMessage(m: MessageServeur) {
   switch (m.type) {
@@ -118,15 +112,23 @@ function surMessage(m: MessageServeur) {
     // (Re)connexion : la demande de liste a pu partir avant l'ouverture du WebSocket
     case 'bienvenue': if (hall) reseau?.envoyer({ type: 'hall' }); break;
     case 'succes': annoncerSucces(m.succes); break;
-    case 'annonce':
-      hall?.nouvelleAnnonce(m.annonce);
+    case 'annonce': {
+      const a = m.annonce;
       // Pas la peine de se l'annoncer à soi-même : on vient de le voir
-      if (m.annonce.pseudo.toLowerCase() !== utilisateur?.pseudo.toLowerCase()) bannierAnnonce(`🎉 <b>${esc(m.annonce.pseudo)}</b> ${esc(m.annonce.texte)}`);
+      if (a.pseudo.toLowerCase() === utilisateur?.pseudo.toLowerCase()) { hall?.nouvelleAnnonce(a); break; }
+      afficherBanniere({ icone: '🎉', surtitre: 'Gros gain au Club', titre: esc(a.pseudo), texte: esc(a.texte), genre: 'gain', son: null, avant: () => hall?.nouvelleAnnonce(a) });
       break;
-    case 'mission':
-      hall?.missionFaite(m.etat);
-      bannierAnnonce(`✅ Mission réussie : <b>${esc(m.mission.texte)}</b> · +${m.mission.recompense.toLocaleString('fr-FR')} ♣${m.toutes ? '<br>Les 3 sont faites : un tour de Grande Roue en plus !' : ''}`, 'mission');
+    }
+    case 'mission': {
+      const etat = m.etat;
+      // La récompense (et le solde) n'apparaît qu'une fois le résultat vu à l'écran
+      afficherBanniere({
+        icone: '✅', surtitre: 'Mission réussie !', titre: esc(m.mission.texte), genre: 'mission', son: 'gagne',
+        texte: `+${m.mission.recompense.toLocaleString('fr-FR')} ♣${m.toutes ? ' · les 3 sont faites : un tour de Grande Roue en plus !' : ''}`,
+        avant: () => hall?.missionFaite(etat),
+      });
       break;
+    }
     case 'entre': if (m.jeu === 'blackjack') allerBJEnLigne(m.casino); else if (m.jeu === 'roulette') allerRouletteEnLigne(m.casino); else allerTableEnLigne(m.casino); break;
     case 'sorti': if (m.raison) toast(m.raison, true); if (table) { fermerTable(); allerHall(); } break;
     case 'erreur':

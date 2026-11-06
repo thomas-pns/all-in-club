@@ -175,3 +175,11 @@ if (typeof document !== 'undefined') {
   // Fermer le menu ouvert si la page défile ou change de taille
   window.addEventListener('resize', () => document.querySelector('.menu-liste')?.remove());
 }
+
+
+/**
+ * Suspense : tant qu'une animation montre un résultat (main de poker, manche de Black Jack, roulette,
+ * ticket pas encore gratté), les notifications (succès, missions, gros gains) attendent leur tour.
+ */
+export const suspense = { kiosque: false, table: (() => false) as () => boolean };
+export const enSuspense = () => suspense.kiosque || suspense.table();

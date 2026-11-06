@@ -16,6 +16,7 @@ import { avatarSVG } from '../art/avatars';
 import type { Stats } from '../../../moteur/succes';
 import { jouerSon } from '../vue/son';
 import { $, $$, esc, html, toast, panneau, avatar, choixAvatars, logoHTML, ouvrirReglagesPerso } from './commun';
+import { enSuspense } from './commun';
 
 function erreurForm(el: HTMLElement, e: unknown) {
   $('.erreur-form', el).textContent = e instanceof ErreurApi ? e.message : 'Erreur inattendue';
@@ -438,21 +439,41 @@ function ecranCompte(zone: HTMLElement, u: Utilisateur, opts: { onMaj: (u: Utili
   $('[data-deco]', el).onclick = () => opts.onDeconnexion();
 }
 
-/** Bandeau doré quand un succès est débloqué. */
-const fileSucces: DefSucces[] = [];
-let annonceEnCours = false;
-export function annoncerSucces(liste: DefSucces[]) {
-  fileSucces.push(...liste);
-  if (annonceEnCours) return;
-  const suivant = () => {
-    const d = fileSucces.shift();
-    if (!d) { annonceEnCours = false; return; }
-    annonceEnCours = true;
-    const b = html(`<div class="annonce-succes"><span class="icone">${d.icone}</span><div><small>Succès débloqué !</small><b>${esc(d.titre)}</b>
-      <span>${esc(d.description)}${d.recompense ? ` · 🎁 ${d.recompense.type === 'cadre' ? 'cadre' : 'dos de cartes'} « ${esc(d.recompense.nom)} »` : ''}</span></div></div>`);
-    document.body.appendChild(b);
-    jouerSon('grosGain');
-    setTimeout(() => { b.style.transition = 'opacity .4s, transform .4s'; b.style.opacity = '0'; setTimeout(() => { b.remove(); suivant(); }, 400); }, 3800);
+export interface Banniere { icone: string; surtitre: string; titre: string; texte?: string; genre?: 'succes' | 'mission' | 'gain'; son?: 'grosGain' | 'gagne' | null; avant?: () => void }
+
+/** Une seule file pour toutes les bannières : jamais deux à la fois, et jamais pendant un suspense. */
+const fileBannieres: Banniere[] = [];
+let banniereEnCours = false;
+export function afficherBanniere(b: Banniere) {
+  fileBannieres.push(b);
+  if (!banniereEnCours) suivanteBanniere();
+}
+
+function suivanteBanniere() {
+  if (!fileBannieres.length) { banniereEnCours = false; return; }
+  banniereEnCours = true;
+  // On attend que l'écran soit calme pendant un petit moment (le temps de voir son gain)
+  let calme = 0;
+  const attendre = () => {
+    if (enSuspense()) calme = 0; else calme += 300;
+    if (calme < 900) { setTimeout(attendre, 300); return; }
+    const d = fileBannieres.shift()!;
+    d.avant?.();
+    const el = html(`<div class="annonce-succes ${d.genre ?? 'succes'}" role="status"><span class="icone">${d.icone}</span><div><small>${esc(d.surtitre)}</small><b>${d.titre}</b>${d.texte ? `<span>${d.texte}</span>` : ''}</div></div>`);
+    document.body.appendChild(el);
+    if (d.son !== null) jouerSon(d.son ?? 'grosGain');
+    el.onclick = () => fermer();
+    let ferme = false;
+    const fermer = () => { if (ferme) return; ferme = true; el.classList.add('part'); setTimeout(() => { el.remove(); suivanteBanniere(); }, 400); };
+    setTimeout(fermer, 3800);
   };
-  suivant();
+  attendre();
+}
+
+/** Bandeau doré quand un succès est débloqué. */
+export function annoncerSucces(liste: DefSucces[]) {
+  for (const d of liste) afficherBanniere({
+    icone: d.icone, surtitre: 'Succès débloqué !', titre: esc(d.titre),
+    texte: `${esc(d.description)}${d.recompense ? ` · 🎁 ${d.recompense.type === 'cadre' ? 'cadre' : 'dos de cartes'} « ${esc(d.recompense.nom)} »` : ''}`,
+  });
 }

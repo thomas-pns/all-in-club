@@ -35,6 +35,8 @@ export class EcranBJ {
   private scene: SceneBJ | null = null;
   private file: Extract<MessageBJ, { type: 'majBJ' }>[] = [];
   private enCours = false;
+  /** Une animation est en cours (les notifications attendent). */
+  get occupe() { return this.enCours || this.file.length > 0; }
   private etat: VueBJ | null = null;
   private debrancher: () => void;
   private detruit = false;
