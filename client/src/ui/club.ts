@@ -504,7 +504,7 @@ export class EcranHall {
       el.textContent = n ? `${n} table${n > 1 ? 's' : ''}` : '';
     }
     const e = $('[data-enligne]', this.el);
-    if (e) e.textContent = `${this.enLigne} joueur${this.enLigne > 1 ? 's' : ''} connecté${this.enLigne > 1 ? 's' : ''}`;
+    if (e) e.textContent = `${this.enLigne} joueur${this.enLigne > 1 ? 's' : ''} connecté${this.enLigne > 1 ? 's' : ''} · v${__VERSION__}`;
   }
 
   /** Les villes du Casino pour le jeu choisi. */
