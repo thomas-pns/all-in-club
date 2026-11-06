@@ -43,13 +43,22 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
     <div class="auvent-large"></div>
     ${offerts ? `<button class="annonce bonus" data-offert><span class="mini-ticket"><i></i><i class="g"></i><i></i><i class="g"></i><i></i><i class="g"></i></span><span><b>${offerts} ticket${offerts > 1 ? 's' : ''} offert${offerts > 1 ? 's' : ''}</b><small>Un Banco gratuit à gratter, touche pour le prendre</small></span></button>` : ''}
     <h3 class="titre-rubrique">Tickets à gratter</h3>
-    <div class="rangee-tickets">${TICKETS_VITRINE.map((t) => `<button class="ticket t-${t.type}" data-ticket="${t.type}"><b>${t.nom}</b><span class="zone-grattage">${esc(t.accroche)}</span>
-      <span class="pied-ticket"><small>${clubs(t.prix)}</small><i>jusqu'à ${fmt(t.max)}</i></span></button>`).join('')}</div>
+    <div class="presentoir">${TICKETS_VITRINE.map((t, i) => `<button class="tk t-${t.type}" data-ticket="${t.type}" style="--d:${i * 0.08}s">
+      ${t.type === 'trefle' ? '<span class="ruban">+ d\'1 chance sur 4</span>' : t.type === 'millionnaire' ? '<span class="ruban">Gros lot</span>' : ''}
+      <span class="tk-titre">${t.nom}</span>
+      <span class="tk-illu">${miniTicket(t.type)}</span>
+      <span class="tk-max"><small>jusqu'à</small><b>${fmtCourt(t.max)}</b></span>
+      <span class="tk-prix">${clubs(t.prix)}</span>
+      <i class="reflet"></i>
+    </button>`).join('')}</div>
     <h3 class="titre-rubrique">Tirages en direct</h3>
-    <button class="tirage-carte keno" data-vue="keno"><span class="boules-deco">${[7, 18, 33, 41, 56, 70].map((n, i) => `<i class="${i % 2 ? 'or' : ''}">${n}</i>`).join('')}</span>
-      <span class="txt"><b>Keno du Club</b><span>Coche 1 à 10 numéros sur 70 · un tirage toutes les 4 minutes</span></span><span class="chrono" data-chrono-keno>…</span></button>
-    <button class="tirage-carte loto" data-vue="loto"><span class="eclair"><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="#FFF4DF" stroke="#2A1E3F" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
-      <span class="txt"><b>Loto Flash</b><span data-cagnotte>5 numéros + 1 étoile · toutes les 10 minutes</span></span><span class="chrono" data-chrono-loto>…</span></button>
+    <button class="tirage-carte keno" data-vue="keno">
+      <span class="tambour">${[7, 18, 33, 41, 56, 70, 12].map((n, i) => `<i style="--i:${i}">${n}</i>`).join('')}</span>
+      <span class="txt"><b class="logo-keno">KENO <em>du Club</em></b><span>Coche 1 à 10 numéros sur 70</span><span class="prochain">Prochain tirage dans <b data-chrono-keno>…</b></span></span></button>
+    <button class="tirage-carte loto" data-vue="loto">
+      <span class="txt"><b class="logo-loto">LOTO <em>FLASH</em> <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="#FFC23D" stroke="#2A1E3F" stroke-width="1.8" stroke-linejoin="round"/></svg></b>
+        <span class="cagnotte-carte"><small>Cagnotte</small><b data-cagnotte>…</b></span>
+        <span class="prochain">5 numéros + 1 étoile · tirage dans <b data-chrono-loto>…</b></span></span></button>
     <p class="doux petit" style="text-align:center;margin-top:14px">Argent fictif du Club : on joue pour le plaisir, rien ne s'achète et rien ne se retire.</p>
   </div>`;
   $$('[data-ticket]', c).forEach((b) => b.onclick = () => ctx.aller(`ticket:${b.dataset.ticket}`));
@@ -60,7 +69,7 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   let decalage = 0, cagnotte: number | null = null;
   void api<{ maintenant: number; cagnotte: number }>('/api/kiosque/loto').then((r) => {
     decalage = r.maintenant - Date.now(); cagnotte = r.cagnotte;
-    const el = $('[data-cagnotte]', c); if (el) el.innerHTML = `5 numéros + 1 étoile · cagnotte ${clubs(cagnotte)}`;
+    const el = $('[data-cagnotte]', c); if (el) el.innerHTML = clubs(cagnotte);
   }).catch(() => {});
   const tic = () => {
     const t = Date.now() + decalage;
@@ -72,6 +81,42 @@ export function vueVitrine(c: HTMLElement, ctx: ContexteKiosque) {
   tic();
   const m = setInterval(tic, 500);
   ctx.nettoyer(() => { clearInterval(m); suspense.kiosque = false; });
+}
+
+/** « 250 000 » → « 250 000 », « 1 000 000 » → « 1 MILLION » (pour les étiquettes). */
+const fmtCourt = (n: number) => (n >= 1_000_000 ? `${fmt(n / 1_000_000)} MILLION` : fmt(n));
+
+/** La petite illustration de chaque ticket sur le présentoir. */
+function miniTicket(t: TypeTicket): string {
+  const T = '#2A1E3F';
+  const argent = '#C9C3D6';
+  if (t === 'banco') {
+    const v = ['500', '', '500', '2 000', '500', ''];
+    return `<svg viewBox="0 0 120 78" aria-hidden="true">${v.map((x, i) => {
+      const cx = 6 + (i % 3) * 38, cy = 4 + Math.floor(i / 3) * 37;
+      return `<rect x="${cx}" y="${cy}" width="32" height="32" rx="7" fill="${x ? (x === '500' ? '#FFC23D' : '#fff') : argent}" stroke="${T}" stroke-width="2.5"/>${x ? `<text x="${cx + 16}" y="${cy + 21}" text-anchor="middle" font-family="Fredoka,sans-serif" font-weight="700" font-size="${x.length > 3 ? 9 : 12}" fill="${T}">${x}</text>` : `<path d="M${cx + 6} ${cy + 26} l20 -20" stroke="#B5AEC6" stroke-width="5"/>`}`;
+    }).join('')}</svg>`;
+  }
+  if (t === 'coffre') {
+    return `<svg viewBox="0 0 120 78" aria-hidden="true">
+      <rect x="22" y="4" width="76" height="66" rx="8" fill="#C7CCD8" stroke="${T}" stroke-width="2.5"/>
+      <rect x="29" y="11" width="62" height="52" rx="5" fill="#3A3150" stroke="${T}" stroke-width="2"/>
+      ${[[38, 45], [60, 45], [49, 28]].map(([x, y]) => `<path d="M${x} ${y + 14} l4 -12 h16 l4 12z" fill="#FFC23D" stroke="${T}" stroke-width="2" stroke-linejoin="round"/>`).join('')}
+      <path d="M98 14 l14 -6 v60 l-14 -4z" fill="#9AA3B8" stroke="${T}" stroke-width="2.5" stroke-linejoin="round"/>
+      <circle cx="105" cy="38" r="4" fill="#FFC23D" stroke="${T}" stroke-width="1.5"/></svg>`;
+  }
+  if (t === 'trefle') {
+    const etoile = (x: number, y: number, n: string, f = '#FFC23D') => `<path transform="translate(${x} ${y})" d="M0 -12 l3.5 7.5 l8.3 1 l-6 5.8 l1.5 8.2 l-7.3 -4 l-7.3 4 l1.5 -8.2 l-6 -5.8 l8.3 -1z" fill="${f}" stroke="${T}" stroke-width="2" stroke-linejoin="round"/><text x="${x}" y="${y + 4}" text-anchor="middle" font-family="Fredoka,sans-serif" font-weight="700" font-size="8.5" fill="${T}">${n}</text>`;
+    return `<svg viewBox="0 0 120 78" aria-hidden="true">
+      <rect x="2" y="2" width="116" height="30" rx="7" fill="#17403F" stroke="${T}" stroke-width="2"/>
+      ${etoile(22, 18, '12')}${etoile(60, 18, '7')}${etoile(98, 18, '28')}
+      ${Array.from({ length: 8 }, (_, i) => { const x = 3 + (i % 4) * 29, y = 37 + Math.floor(i / 4) * 21; const c = i === 2 ? '#FFC23D' : i === 5 ? argent : '#1F5C5A'; return `<rect x="${x}" y="${y}" width="27" height="18" rx="4" fill="${c}" stroke="${T}" stroke-width="1.8"/>${i === 5 ? '' : `<text x="${x + 13.5}" y="${y + 13}" text-anchor="middle" font-family="Fredoka,sans-serif" font-weight="700" font-size="${i === 6 ? 13 : 10}" fill="${i === 2 ? T : i === 6 ? '#5BE38B' : '#FFF4DF'}">${['31', '4', '7', '19', '25', '', '♣\uFE0E', '11'][i]}</text>`}`; }).join('')}</svg>`;
+  }
+  return `<svg viewBox="0 0 120 78" aria-hidden="true">
+    <path d="M30 56 l-8 -34 l20 14 l18 -26 l18 26 l20 -14 l-8 34z" fill="#FFC23D" stroke="${T}" stroke-width="2.8" stroke-linejoin="round"/>
+    <rect x="28" y="56" width="64" height="12" rx="3" fill="#E59A12" stroke="${T}" stroke-width="2.5"/>
+    ${[[42, 44, '#FF6B5B'], [60, 40, '#46C2F0'], [78, 44, '#43B072']].map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="5" fill="${c}" stroke="${T}" stroke-width="1.8"/>`).join('')}
+    <path d="M8 20 l4 -6 l4 6 l-4 6z M104 14 l5 -7 l5 7 l-5 7z" fill="#BFE8FF" stroke="${T}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
 }
 
 /* ============================ Ticket à gratter ============================ */
@@ -334,6 +379,47 @@ interface EtatKeno {
   maintenant: number;
 }
 
+/** Probabilité d'avoir exactement k bons numéros en en cochant n (20 tirés sur 70). */
+function chanceKeno(n: number, k: number) {
+  const C = (a: number, b: number) => { if (b < 0 || b > a) return 0; let r = 1; for (let i = 1; i <= b; i++) r = (r * (a - b + i)) / i; return r; };
+  return C(KENO.tires, k) * C(KENO.numeros - KENO.tires, n - k) / C(KENO.numeros, n);
+}
+const fmtChance = (p: number) => { const x = 1 / p; return x < 10 ? x.toFixed(1).replace('.', ',') : fmt(Math.round(x)); };
+
+/** Comment jouer au Keno, comme sur le bulletin officiel. */
+function ouvrirCommentKeno() {
+  const p = panneau(`<h2>Comment jouer au Keno</h2>
+    <ol class="etapes-keno">
+      <li><b>Coche de 1 à 10 numéros</b> sur la grille de 1 à 70. Plus tu en coches, plus les gros lots sont gros… et plus il faut de bons numéros pour gagner.</li>
+      <li><b>Choisis ta mise</b> : ${KENO.mises.map((m) => clubs(m)).join(', ')} par tirage.</li>
+      <li><b>Choisis le nombre de tirages</b> : 1, 3, 5 ou 10 tirages d'affilée avec la même grille.</li>
+      <li><b>Toutes les 4 minutes, 20 numéros sont tirés</b> sur les 70. Tu les vois sortir en direct, et tes bons numéros s'allument.</li>
+      <li><b>Ton gain = ta mise × le multiplicateur</b> du tableau, selon le nombre de numéros cochés et de bons numéros. Il arrive tout seul sur ton portefeuille.</li>
+    </ol>
+    <p class="doux petit">Astuce : avec 10 numéros cochés, en trouver 0 rapporte aussi ×2 ! Les grilles se ferment 10 secondes avant chaque tirage.</p>
+    <button class="btn btn-or btn-plein" data-tab>Voir le tableau des gains</button>`);
+  $('[data-tab]', p.el).onclick = () => { p.fermer(); ouvrirTableauKeno(10); };
+}
+
+/** Le tableau des gains complet : un onglet par nombre de numéros cochés. */
+function ouvrirTableauKeno(depart: number) {
+  const p = panneau(`<h2>Tableau des gains</h2>
+    <p class="doux petit" style="margin:0 0 8px">Gain pour une mise de ${clubs(100)} (pour une autre mise, c'est proportionnel). Chance calculée sur 20 numéros tirés parmi 70.</p>
+    <div class="choix-coches">${Array.from({ length: 10 }, (_, i) => `<button data-n="${i + 1}">${i + 1}</button>`).join('')}</div>
+    <div data-table></div>`);
+  const afficher = (n: number) => {
+    $$('[data-n]', p.el).forEach((b) => b.classList.toggle('on', Number(b.dataset.n) === n));
+    const g = KENO_GAINS[n];
+    const total = Object.keys(g).reduce((s, k) => s + chanceKeno(n, +k), 0);
+    $('[data-table]', p.el).innerHTML = `<div class="titre-bareme">${n} numéro${n > 1 ? 's' : ''} coché${n > 1 ? 's' : ''}</div>
+      <table class="table-keno"><thead><tr><th>Bons numéros</th><th>Gain</th><th>Chance</th></tr></thead><tbody>
+      ${Object.entries(g).sort((a, b) => +b[0] - +a[0]).map(([k, m]) => `<tr><td><b>${k}</b> sur ${n}</td><td class="gain">${clubs(m * 100)} <small>×${m}</small></td><td>1 sur ${fmtChance(chanceKeno(n, +k))}</td></tr>`).join('')}
+      </tbody></table><p class="doux petit" style="margin-top:8px">Chance de gagner quelque chose : 1 sur ${fmtChance(total)}</p>`;
+  };
+  $$('[data-n]', p.el).forEach((b) => b.onclick = () => afficher(Number(b.dataset.n)));
+  afficher(depart);
+}
+
 let choixKeno: number[] = [];
 let miseKeno = 100;
 let tiragesKeno = 1;
@@ -342,6 +428,7 @@ export function vueKeno(c: HTMLElement, ctx: ContexteKiosque) {
   c.innerHTML = `<div class="vue-keno">
     <div class="ligne" style="gap:10px;margin-bottom:10px"><button class="btn btn-rond btn-fantome" data-retour aria-label="Retour au Kiosque">←</button>
       <h1 style="font-size:26px;flex:1">KENO <span style="color:var(--or)">du Club</span></h1><span class="chrono grand" data-chrono>…</span></div>
+    <div class="aide-keno"><button class="btn btn-petit" data-comment>📖 Comment jouer</button><button class="btn btn-petit" data-tableau>💰 Tableau des gains</button></div>
     <div class="dernier-tirage" data-dernier></div>
     <div class="ligne" style="justify-content:space-between;margin:12px 0 6px"><b style="font-family:Fredoka;font-size:17px">Coche tes numéros</b><span class="compte-choix" data-compte></span></div>
     <div class="grille-keno" data-grille>${Array.from({ length: KENO.numeros }, (_, i) => `<button data-n="${i + 1}">${i + 1}</button>`).join('')}</div>
@@ -353,6 +440,8 @@ export function vueKeno(c: HTMLElement, ctx: ContexteKiosque) {
     <h3 class="titre-rubrique">Mes grilles</h3><div class="mes-grilles" data-grilles></div>
   </div>`;
   $('[data-retour]', c).onclick = () => ctx.aller('kiosque');
+  $('[data-comment]', c).onclick = () => ouvrirCommentKeno();
+  $('[data-tableau]', c).onclick = () => ouvrirTableauKeno(choixKeno.length || 10);
   let etat: EtatKeno | null = null, decalage = 0, enDirect = false;
   const maj = () => {
     $$('[data-n]', c).forEach((b) => b.classList.toggle('on', choixKeno.includes(Number(b.dataset.n))));
@@ -360,7 +449,10 @@ export function vueKeno(c: HTMLElement, ctx: ContexteKiosque) {
     $$('[data-tirages]', c).forEach((b) => b.classList.toggle('on', Number(b.dataset.tirages) === tiragesKeno));
     $('[data-compte]', c).textContent = `${choixKeno.length} / 10`;
     const g = KENO_GAINS[choixKeno.length];
-    $('[data-bareme]', c).innerHTML = g ? `<small>Avec ${choixKeno.length} numéro${choixKeno.length > 1 ? 's' : ''} et ${miseKeno} <i class="pc"></i> :</small>${Object.entries(g).sort((a, b) => +b[0] - +a[0]).map(([k, mult]) => `<span>${k} bon${+k > 1 ? 's' : ''} → <b>${clubs(mult * miseKeno)}</b></span>`).join('')}` : '<small>Coche entre 1 et 10 numéros</small>';
+    $('[data-bareme]', c).innerHTML = g
+      ? `<div class="titre-bareme">Tes gains possibles · ${choixKeno.length} numéro${choixKeno.length > 1 ? 's' : ''} cochés, mise ${clubs(miseKeno)}</div>
+        <table class="table-keno"><thead><tr><th>Bons numéros</th><th>Tu gagnes</th><th>Chance</th></tr></thead><tbody>${Object.entries(g).sort((a, b) => +b[0] - +a[0]).map(([k, mult]) => `<tr><td><b>${k}</b> sur ${choixKeno.length}</td><td class="gain">${clubs(mult * miseKeno)} <small>×${mult}</small></td><td>1 sur ${fmtChance(chanceKeno(choixKeno.length, +k))}</td></tr>`).join('')}</tbody></table>`
+      : '<div class="titre-bareme">Coche entre 1 et 10 numéros : le tableau de tes gains s\'affiche ici.</div>';
     const b = $('[data-jouer]', c) as HTMLButtonElement;
     b.disabled = !choixKeno.length;
     b.innerHTML = `Jouer ${clubs(miseKeno * tiragesKeno)}${tiragesKeno > 1 ? ` (${tiragesKeno} tirages)` : ''}`;
@@ -469,10 +561,13 @@ export function vueLoto(c: HTMLElement, ctx: ContexteKiosque) {
       <h1 style="font-size:28px;flex:1;font-style:italic">LOTO <span style="color:var(--corail)">FLASH</span></h1></div>
     <div class="cagnotte-loto"><small>Cagnotte du prochain tirage</small><b data-cagnotte>…</b><span>Tirage à <b data-heure>…</b> · dans <b data-chrono>…</b></span></div>
     <div class="dernier-loto" data-dernier></div>
-    <b class="sous-titre">5 numéros sur ${LOTO.numeros}</b>
+    <div class="bulletin">
+    <div class="entete-bulletin"><b>LOTO <em>FLASH</em></b><small>Bulletin · grille simple</small></div>
+    <b class="sous-titre">Coche 5 numéros sur ${LOTO.numeros}</b>
     <div class="grille-loto" data-grille>${Array.from({ length: LOTO.numeros }, (_, i) => `<button data-n="${i + 1}">${i + 1}</button>`).join('')}</div>
-    <b class="sous-titre">1 étoile sur ${LOTO.etoiles}</b>
-    <div class="etoiles-loto">${Array.from({ length: LOTO.etoiles }, (_, i) => `<button data-e="${i + 1}">★ ${i + 1}</button>`).join('')}</div>
+    <b class="sous-titre">et 1 étoile sur ${LOTO.etoiles}</b>
+    <div class="etoiles-loto">${Array.from({ length: LOTO.etoiles }, (_, i) => `<button data-e="${i + 1}" aria-label="Étoile ${i + 1}"><svg viewBox="0 0 50 48" aria-hidden="true"><path d="M25 3 l6.8 14 l15.4 2.2 l-11.1 10.9 l2.6 15.4 l-13.7 -7.2 l-13.7 7.2 l2.6 -15.4 l-11.1 -10.9 l15.4 -2.2z"/></svg><span>${i + 1}</span></button>`).join('')}</div>
+    </div>
     <div class="ligne" style="margin-top:12px;gap:10px"><button class="btn" data-flash style="flex:1">Flash au hasard</button><button class="btn btn-corail" data-jouer style="flex:1.3">Jouer · ${clubs(LOTO.prix)}</button></div>
     <details class="bareme-loto"><summary>Les gains</summary>${LOTO_GAINS.map((r) => `<div><span>${r.nom}</span><b>${r.gain === 'cagnotte' ? 'la cagnotte !' : clubs(r.gain)}</b></div>`).join('')}</details>
     <h3 class="titre-rubrique">Mes grilles</h3><div class="mes-grilles" data-grilles></div>
@@ -518,7 +613,7 @@ export function vueLoto(c: HTMLElement, ctx: ContexteKiosque) {
     $('[data-grilles]', c).innerHTML = etat.grilles.length ? etat.grilles.map((g) => {
       const t = g.tirage === etat!.dernier?.id ? etat!.dernier : null;
       return `<div class="ma-grille"><span class="quand">${g.gain === null ? `Tirage de ${heure(g.tirage * LOTO.periode)}` : g.rang ?? `n° ${g.tirage}`}</span>
-        <span class="nums">${g.numeros.map((n) => `<i class="${t?.numeros.includes(n) ? 'bon' : ''}">${n}</i>`).join('')}<i class="etoile ${t?.etoile === g.etoile ? 'bon' : ''}">★${g.etoile}</i></span>
+        <span class="nums">${g.numeros.map((n) => `<i class="${t?.numeros.includes(n) ? 'bon' : ''}">${n}</i>`).join('')}<i class="etoile ${t?.etoile === g.etoile ? 'bon' : ''}">${g.etoile}</i></span>
         <b class="${g.gain ? 'plus' : ''}">${g.gain === null ? `${fmt(LOTO.prix)} <i class="pc"></i>` : g.gain ? `+${fmt(g.gain)}` : 'perdu'}</b></div>`;
     }).join('') : '<span class="doux petit">Aucune grille pour l\'instant</span>';
   }
@@ -528,7 +623,7 @@ export function vueLoto(c: HTMLElement, ctx: ContexteKiosque) {
     const nums = n ?? d?.numeros ?? [];
     const et = e === undefined ? d?.etoile ?? null : e;
     $('[data-dernier]', c).innerHTML = `<small>${titre ?? (d ? `Tirage de ${heure(d.heure)}${d.gagnants ? ` · ${d.gagnants} grille${d.gagnants > 1 ? 's' : ''} gagnante${d.gagnants > 1 ? 's' : ''}` : ''}` : 'Pas encore de tirage')}</small>
-      <div class="boules">${nums.map((x) => `<i>${x}</i>`).join('')}${et ? `<i class="etoile">★${et}</i>` : ''}</div>`;
+      <div class="boules">${nums.map((x) => `<i>${x}</i>`).join('')}${et ? `<i class="etoile">${et}</i>` : ''}</div>`;
   }
 
   async function direct(id: number) {

@@ -1199,3 +1199,90 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .carte-invitation .boutons { display: flex; gap: 8px; width: 100%; }
 .carte-invitation .boutons .btn { flex: 1; }
 .carte-invitation .btn-fantome { color: var(--trait); border-color: rgba(42,30,63,.35); }
+
+/* ======================= Kiosque : le présentoir ======================= */
+.presentoir { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 6px; }
+@media (min-width: 760px) { .presentoir { grid-template-columns: repeat(4, 1fr); } }
+.tk { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 10px 10px; border: 3px solid var(--trait); border-radius: 16px; box-shadow: 0 6px 0 var(--trait); cursor: pointer; font: inherit; text-align: center; animation: arrivee .45s cubic-bezier(.2,.9,.3,1.2) both; animation-delay: var(--d); transition: transform .12s; }
+.tk:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--trait); }
+.tk::before { content: ''; position: absolute; inset: 5px; border: 2px dashed rgba(255,255,255,.35); border-radius: 11px; pointer-events: none; }
+.tk-titre { font-family: Fredoka; font-weight: 700; font-size: 19px; line-height: 1.05; text-shadow: 2px 2px 0 var(--trait); color: var(--creme); }
+.tk.t-banco .tk-titre { color: var(--or); font-size: 24px; letter-spacing: 1px; }
+.tk.t-millionnaire .tk-titre { color: #FFE27A; }
+.tk-illu { width: 100%; background: rgba(255,255,255,.14); border-radius: 10px; padding: 5px; }
+.tk-illu svg { display: block; width: 100%; height: auto; }
+.tk-max { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 104px; height: 58px; margin-top: -2px; background: #FFE27A; color: var(--trait);
+  clip-path: polygon(50% 0, 60% 14%, 76% 4%, 78% 22%, 96% 20%, 88% 38%, 100% 50%, 88% 62%, 96% 80%, 78% 78%, 76% 96%, 60% 86%, 50% 100%, 40% 86%, 24% 96%, 22% 78%, 4% 80%, 12% 62%, 0 50%, 12% 38%, 4% 20%, 22% 22%, 24% 4%, 40% 14%);
+  animation: palpite 2.4s ease-in-out infinite; }
+.tk-max small { font-size: 9.5px; font-weight: 800; text-transform: uppercase; line-height: 1; }
+.tk-max b { font-family: Fredoka; font-weight: 700; font-size: 14px; line-height: 1.05; white-space: nowrap; }
+@keyframes palpite { 0%, 100% { transform: scale(1) rotate(-4deg); } 50% { transform: scale(1.07) rotate(3deg); } }
+.tk-prix { background: var(--trait); color: var(--or); border-radius: 999px; padding: 4px 12px; font-family: Fredoka; font-weight: 700; font-size: 16px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.tk .ruban { position: absolute; top: 44px; right: 4px; transform: rotate(6deg); background: #E5484D; color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border: 2px solid var(--trait); border-radius: 8px; text-transform: uppercase; z-index: 2; white-space: nowrap; box-shadow: 0 2px 0 var(--trait); }
+.tk .reflet { position: absolute; top: -40%; left: -60%; width: 40%; height: 180%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); transform: rotate(20deg); animation: reflet 5s ease-in-out infinite; animation-delay: calc(var(--d) * 8); pointer-events: none; }
+@keyframes reflet { 0%, 70% { left: -60%; } 90%, 100% { left: 130%; } }
+.tk.t-banco { background: radial-gradient(ellipse at 50% 20%, #4C8BE8, #1E4FA8); }
+.tk.t-coffre { background: radial-gradient(ellipse at 50% 30%, #F0524F, #B81F2E); }
+.tk.t-trefle { background: repeating-linear-gradient(120deg, #F59A2A 0 6px, #F2A73E 6px 12px); }
+.tk.t-millionnaire { background: radial-gradient(ellipse at 50% 0%, #7B4FC4, #2A1650); }
+@media (prefers-reduced-motion: reduce) { .tk, .tk-max, .tk .reflet { animation: none; } }
+
+/* Les cartes des tirages */
+.tirage-carte.keno { background: linear-gradient(135deg, #46C2F0, #2E8FD0); color: var(--trait); align-items: center; }
+.tirage-carte.loto { background: radial-gradient(ellipse at 80% 20%, #FFE27A, #F2A516); }
+.tirage-carte .prochain { font-size: 13px; font-weight: 800; }
+.tirage-carte .prochain b { font-family: Fredoka; font-size: 15px; background: var(--trait); color: var(--or); border-radius: 8px; padding: 1px 7px; }
+.logo-keno { font-family: Fredoka; font-weight: 700; font-size: 26px !important; color: #fff; text-shadow: 2px 2px 0 var(--trait); letter-spacing: 1px; }
+.logo-keno em { font-style: normal; font-size: 16px; color: var(--or); }
+.logo-loto { font-family: Fredoka; font-weight: 700; font-size: 26px !important; font-style: italic; color: var(--trait); display: flex; align-items: center; gap: 4px; }
+.logo-loto em { color: #E5484D; }
+.tambour { position: relative; flex: none; width: 76px; height: 76px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.7), rgba(255,255,255,.2)); border: 3px solid var(--trait); overflow: hidden; }
+.tambour i { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: var(--creme); border: 2px solid var(--trait); font-style: normal; font-size: 9.5px; font-weight: 800; display: grid; place-items: center; left: 26px; top: 26px; animation: brasse 2.8s ease-in-out infinite; animation-delay: calc(var(--i) * -0.4s); }
+.tambour i:nth-child(2n) { background: var(--or); }
+@keyframes brasse { 0% { transform: translate(-16px, 14px); } 25% { transform: translate(14px, -16px) rotate(90deg); } 50% { transform: translate(16px, 16px) rotate(180deg); } 75% { transform: translate(-14px, -14px) rotate(270deg); } 100% { transform: translate(-16px, 14px) rotate(360deg); } }
+.cagnotte-carte { display: flex; align-items: baseline; gap: 8px; margin: 2px 0; }
+.cagnotte-carte small { font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.cagnotte-carte b { font-family: Fredoka; font-weight: 700; font-size: 30px !important; color: #fff; text-shadow: 2px 2px 0 var(--trait), -1px -1px 0 var(--trait); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Keno : aide, tableau des gains */
+.aide-keno { display: flex; gap: 8px; margin-bottom: 10px; }
+.aide-keno .btn { flex: 1; }
+.bareme { display: block; }
+.titre-bareme { font-weight: 800; font-size: 13px; color: var(--doux); margin-bottom: 6px; }
+.table-keno { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.table-keno th { text-align: left; font-size: 11.5px; color: var(--doux); font-weight: 800; padding: 3px 4px; text-transform: uppercase; }
+.table-keno td { padding: 6px 4px; border-top: 1.5px solid rgba(255,244,223,.1); font-weight: 700; white-space: nowrap; }
+.table-keno td.gain { color: var(--or); font-family: Fredoka; font-weight: 600; font-size: 15px; }
+.table-keno td.gain small { color: var(--doux); font-family: Nunito; font-size: 11px; }
+.table-keno th:last-child, .table-keno td:last-child { text-align: right; color: var(--doux); }
+.choix-coches { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin-bottom: 10px; }
+.choix-coches button { aspect-ratio: 1; border-radius: 50%; border: 2px solid var(--trait); background: var(--nuit3); color: var(--creme); font-weight: 800; font-size: 13px; cursor: pointer; padding: 0; }
+.choix-coches button.on { background: var(--or); color: var(--trait); }
+.etapes-keno { padding-left: 20px; margin: 0 0 10px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.4; }
+
+/* Loto Flash : le bulletin papier */
+.bulletin { background: #FFF8EA; color: var(--trait); border: 3px solid var(--trait); border-radius: 14px; padding: 10px 10px 12px; box-shadow: 0 6px 0 var(--trait); background-image: linear-gradient(90deg, #E5484D 0 8px, transparent 8px); }
+.entete-bulletin { display: flex; justify-content: space-between; align-items: baseline; padding-left: 10px; margin-bottom: 4px; border-bottom: 2px dashed #E8C9A0; padding-bottom: 6px; }
+.entete-bulletin b { font-family: Fredoka; font-weight: 700; font-size: 20px; font-style: italic; } .entete-bulletin b em { color: #E5484D; }
+.entete-bulletin small { font-size: 11px; font-weight: 800; color: #9C7A5A; text-transform: uppercase; }
+.bulletin .sous-titre { display: block; padding-left: 10px; margin: 8px 0 6px; color: #B03A3A; font-size: 14px; }
+.bulletin .grille-loto { padding-left: 10px; }
+.bulletin .grille-loto button { border-radius: 4px; border: 2px solid #E5484D; background: #fff; color: #B03A3A; font-family: Fredoka; font-weight: 600; aspect-ratio: auto; min-height: 32px; position: relative; }
+.bulletin .grille-loto button.on { background: #fff; color: #B03A3A; }
+.bulletin .grille-loto button.on::after { content: '✕'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; color: #2A1E3F; font-family: Nunito; font-weight: 800; animation: monte .2s cubic-bezier(.3,1.6,.5,1); }
+.bulletin .etoiles-loto { padding-left: 10px; }
+.etoiles-loto button { position: relative; display: grid; place-items: center; background: none !important; border: none !important; min-height: 50px; padding: 0; cursor: pointer; }
+.etoiles-loto button svg { position: absolute; width: 48px; height: 46px; }
+.etoiles-loto button svg path { fill: #fff; stroke: #E5484D; stroke-width: 2.6; stroke-linejoin: round; transition: fill .15s; }
+.etoiles-loto button span { position: relative; font-family: Fredoka; font-weight: 700; font-size: 16px; color: #B03A3A; margin-top: 4px; }
+.etoiles-loto button.on svg path { fill: #FFC23D; stroke: var(--trait); }
+.etoiles-loto button.on span { color: var(--trait); }
+.etoiles-loto button.on svg { animation: tinte .4s cubic-bezier(.3,1.6,.5,1); }
+/* Les étoiles du tirage et de l'historique : un rond bleu étoilé, numéro bien centré */
+.boules i.etoile, .ma-grille .nums i.etoile { width: auto; min-width: 0; padding: 0; aspect-ratio: 1; border-radius: 50%; background: #46C2F0; color: var(--trait); display: grid; place-items: center; position: relative; line-height: 1; }
+.ma-grille .nums i.etoile { width: 24px; height: 24px; }
+.boules i.etoile { width: 28px; height: 28px; }
+.dernier-loto .boules i.etoile { width: 40px; height: 40px; }
+.boules i.etoile::before, .ma-grille .nums i.etoile::before { content: '★'; position: absolute; top: -9px; right: -5px; font-size: 13px; color: #FFC23D; text-shadow: 0 0 2px var(--trait); }
+.ma-grille .nums i.etoile.bon { background: var(--or); }
+.ma-grille b { white-space: nowrap; }
