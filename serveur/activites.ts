@@ -81,6 +81,7 @@ export class Activites {
 
   /** Un gros gain : on le crie dans tout le Club. */
   annoncer(u: number, texte: string, montant: number) {
+    if (this.porte?.estTest(u)) return; // les comptes de test ne font pas de bruit
     const id = Number(this.db.prepare('INSERT INTO annonces (date, utilisateur, texte, montant) VALUES (?, ?, ?, ?)').run(this.horloge(), u, texte.slice(0, 120), montant).lastInsertRowid);
     this.db.prepare('DELETE FROM annonces WHERE id <= ?').run(id - 50);
     const a = this.annonce(id);

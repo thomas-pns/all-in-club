@@ -39,6 +39,19 @@ export class Notifications {
     this.db.prepare('DELETE FROM abonnements_push WHERE utilisateur = ? AND endpoint = ?').run(u, String(endpoint ?? ''));
   }
 
+  /** Une notification sur le téléphone du joueur (s'il les a activées). */
+  async envoyer(u: number, titre: string, corps: string, tag = 'club') {
+    const abonnements = this.db.prepare('SELECT endpoint, json FROM abonnements_push WHERE utilisateur = ?').all(u) as { endpoint: string; json: string }[];
+    const charge = JSON.stringify({ titre, corps, tag });
+    await Promise.all(abonnements.map(async (a) => {
+      try { await webpush.sendNotification(JSON.parse(a.json), charge, { TTL: 3600 }); }
+      catch (e) {
+        const code = (e as { statusCode?: number }).statusCode;
+        if (code === 404 || code === 410) this.db.prepare('DELETE FROM abonnements_push WHERE endpoint = ?').run(a.endpoint);
+      }
+    }));
+  }
+
   /** Prévient un joueur que c'est à lui de jouer (au plus une fois toutes les 20 secondes). */
   async tour(u: number, table: string) {
     const t = Date.now();

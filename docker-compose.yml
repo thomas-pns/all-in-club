@@ -12,6 +12,8 @@ services:
       - ./data:/data
     environment:
       URL_PUBLIQUE: https://allin.parlotte.synology.me
+      # Pseudos des admins (séparés par des virgules). Vide : le premier compte créé est admin.
+      ADMINS: ""
       # E-mail « mot de passe oublié » (facultatif) : exemple avec Gmail et un mot de passe d'application
       # SMTP_HOTE: smtp.gmail.com
       # SMTP_PORT: "465"

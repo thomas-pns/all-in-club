@@ -128,15 +128,43 @@ export async function ouvrirInvitation() {
   const p = panneau(`<h2>Inviter des amis</h2><p class="doux petit" style="margin:0 0 12px">Ils recevront une invitation pour te rejoindre à cette table.</p><div data-inv><span class="doux">Chargement…</span></div>`);
   try {
     const d = await api<ListeAmis>('/api/amis');
-    const dispo = d.amis.filter((a) => a.enLigne);
-    $('[data-inv]', p.el).innerHTML = dispo.length ? dispo.map((a) => `<div class="ami en-ligne"><span class="av">${av(a, 40)}<i></i></span><span class="txt"><b>${esc(a.pseudo)}</b><small>${statut(a)}</small></span>
-      <button class="btn btn-petit btn-or" data-inviter="${esc(a.pseudo)}">Inviter</button></div>`).join('')
-      : `<div class="vide-liste">${d.amis.length ? 'Aucun ami connecté pour l\'instant.' : 'Tu n\'as pas encore d\'amis : ajoute-les dans l\'onglet Amis du Club.'}<br>Tu peux aussi leur envoyer le code de la table.</div>`;
+    const dispo = d.amis;
+    $('[data-inv]', p.el).innerHTML = dispo.length ? dispo.map((a) => `<div class="ami ${a.enLigne ? 'en-ligne' : ''}"><span class="av">${av(a, 40)}<i></i></span><span class="txt"><b>${esc(a.pseudo)}</b><small>${statut(a)}</small></span>
+      <button class="btn btn-petit ${a.enLigne ? 'btn-or' : ''}" data-inviter="${esc(a.pseudo)}">${a.enLigne ? 'Inviter' : 'Prévenir'}</button></div>`).join('')
+      : `<div class="vide-liste">Tu n'as pas encore d'amis : ajoute-les dans l'onglet Amis du Club.<br>Tu peux aussi leur envoyer le code de la table.</div>`;
     $$('[data-inviter]', p.el).forEach((b) => b.onclick = async () => {
       try { await api(`/api/amis/${encodeURIComponent(b.dataset.inviter!)}/inviter`, {}); b.textContent = 'Invité ✓'; (b as HTMLButtonElement).disabled = true; jouerSon('clic'); }
       catch (e) { erreur(e); }
     });
   } catch (e) { $('[data-inv]', p.el).innerHTML = ''; erreur(e); }
+}
+
+/**
+ * Choisir des amis à emmener (Casino, table privée) : ils reçoivent une invitation dès qu'on est assis.
+ * Ceux qui ne sont pas connectés la trouvent dans leur cloche.
+ */
+export function choisirAmis(deja: string[], texte = 'Ils recevront une invitation dès que tu seras assis.'): Promise<string[] | null> {
+  return new Promise((fini) => {
+    let choix = new Set(deja.map((x) => x.toLowerCase()));
+    let valide = false;
+    const p = panneau(`<h2>Jouer avec des potes</h2><p class="doux petit" style="margin:0 0 12px">${texte}</p><div data-choix><span class="doux">Chargement…</span></div>
+      <button class="btn btn-or btn-plein" data-ok style="margin-top:14px">C'est bon</button>`, { onFerme: () => { if (!valide) fini(null); } });
+    $('[data-ok]', p.el).onclick = () => { valide = true; p.fermer(); fini(d ? d.amis.filter((a) => choix.has(a.pseudo.toLowerCase())).map((a) => a.pseudo) : []); };
+    let d: ListeAmis | null = null;
+    void api<ListeAmis>('/api/amis').then((r) => {
+      d = r;
+      const z = $('[data-choix]', p.el);
+      if (!r.amis.length) { z.innerHTML = '<div class="vide-liste">Tu n\'as pas encore d\'amis : ajoute-les dans l\'onglet Amis du Club.</div>'; return; }
+      z.innerHTML = `<div class="choix-amis">${r.amis.map((a) => `<label class="ami ${a.enLigne ? 'en-ligne' : ''}"><span class="av">${av(a, 40)}<i></i></span>
+        <span class="txt"><b>${esc(a.pseudo)}</b><small>${statut(a)}</small></span><input type="checkbox" value="${esc(a.pseudo)}" ${choix.has(a.pseudo.toLowerCase()) ? 'checked' : ''}><span class="coche"></span></label>`).join('')}</div>`;
+      $$('input', z).forEach((i) => (i as HTMLInputElement).onchange = () => {
+        const v = (i as HTMLInputElement).value.toLowerCase();
+        if ((i as HTMLInputElement).checked) { if (choix.size >= 5) { (i as HTMLInputElement).checked = false; toast('5 potes maximum', true); return; } choix.add(v); } else choix.delete(v);
+        jouerSon('clic');
+      });
+    }).catch(erreur);
+    choix = new Set(choix);
+  });
 }
 
 /** Une invitation reçue : une carte en bas de l'écran, avec « Rejoindre ». */

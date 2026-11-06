@@ -73,11 +73,21 @@ export class Portefeuilles {
   /** Ajoute (ou retire, si négatif) des Clubs. Refuse de passer sous zéro. */
   crediter(u: number, montant: number, motif: string): number {
     const l = this.ligne(u);
+    if (montant < 0 && this.estTest(u)) {
+      // Compte de test : on note le mouvement mais rien n'est débité
+      this.db.prepare('INSERT INTO mouvements (utilisateur, date, montant, motif, solde) VALUES (?, ?, 0, ?, ?)').run(u, this.horloge(), `(test, non débité) ${motif}`.slice(0, 80), l.solde);
+      return l.solde;
+    }
     const solde = l.solde + Math.trunc(montant);
     if (solde < 0) throw new ErreurPortefeuille('Pas assez de Clubs');
     this.db.prepare('UPDATE portefeuilles SET solde = ? WHERE utilisateur = ?').run(solde, u);
     this.db.prepare('INSERT INTO mouvements (utilisateur, date, montant, motif, solde) VALUES (?, ?, ?, ?, ?)').run(u, this.horloge(), Math.trunc(montant), motif.slice(0, 80), solde);
     return solde;
+  }
+
+  /** Compte de test (mode admin) ? */
+  estTest(u: number): boolean {
+    return !!(this.db.prepare('SELECT test FROM utilisateurs WHERE id = ?').get(u) as { test?: number } | undefined)?.test;
   }
 
   /**
@@ -132,6 +142,6 @@ export class Portefeuilles {
 
   /** Les plus riches du Club. */
   classement(n = 50) {
-    return this.db.prepare(`SELECT u.pseudo, u.avatar, u.cadre, p.solde FROM portefeuilles p JOIN utilisateurs u ON u.id = p.utilisateur ORDER BY p.solde DESC, u.pseudo LIMIT ?`).all(n) as { pseudo: string; avatar: string; cadre: string; solde: number }[];
+    return this.db.prepare(`SELECT u.pseudo, u.avatar, u.cadre, p.solde FROM portefeuilles p JOIN utilisateurs u ON u.id = p.utilisateur WHERE u.test = 0 ORDER BY p.solde DESC, u.pseudo LIMIT ?`).all(n) as { pseudo: string; avatar: string; cadre: string; solde: number }[];
   }
 }

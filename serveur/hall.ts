@@ -21,14 +21,15 @@ import type { MessageAmi, Presence } from './amis.js';
 import { Utilisateur } from './comptes.js';
 import { Donnees, idUtilisateur } from './donnees.js';
 import { Notifications } from './notifications.js';
+import type { Notif } from './boite.js';
 
 /* ------------------------- Protocole WebSocket ------------------------- */
 
 export type MessageClient =
   | { type: 'auth'; jeton: string }
   | { type: 'hall' }                                  // s'abonner à la liste des tables
-  | { type: 'casino'; jeu: Jeu; ville: string }
-  | { type: 'creer'; jeu?: Jeu; reglages: Partial<ReglagesSalle> | Partial<ReglagesBJ> | Partial<ReglagesRoulette> }
+  | { type: 'casino'; jeu: Jeu; ville: string; inviter?: string[] }
+  | { type: 'creer'; jeu?: Jeu; casino?: string; inviter?: string[]; reglages: Partial<ReglagesSalle> | Partial<ReglagesBJ> | Partial<ReglagesRoulette> }
   | { type: 'rejoindre'; id?: string; code?: string }
   | { type: 'regarder'; id: string }
   | { type: 'quitter' }
@@ -48,6 +49,7 @@ export type MessageServeur =
   | { type: 'succes'; succes: Omit<DefinitionSucces, 'test'>[] }
   | { type: 'erreur'; texte: string }
   | { type: 'annonce'; annonce: Annonce }
+  | { type: 'notif'; notif: Notif; nonLues: number }
   | MessageAmi
   | ({ type: 'mission'; etat: EtatPortefeuille | null } & MissionFaite)
   | { type: 'pong' };
@@ -67,7 +69,10 @@ export class Hall {
 
   private sauvegardes = new Map<string, ReturnType<typeof setTimeout>>();
   /** Tables du Casino : on y joue ses Clubs ♣. */
-  private casino = new Map<string, { jeu: Jeu; ville: Ville }>();
+  private casino = new Map<string, { jeu: Jeu; ville: Ville; prive?: boolean }>();
+  /** Branchés par l'application : inviter des amis, suivre l'argent des tables privées. */
+  surInviter: ((u: number, pseudos: string[]) => void) | null = null;
+  surFluxPrive: ((u: number, montant: number) => void) | null = null;
   private menage: ReturnType<typeof setInterval>;
 
   constructor(private donnees: Donnees | null = null, private notifications: Notifications | null = null, private porte: Portefeuilles | null = null, private activites: Activites | null = null) {
@@ -105,7 +110,7 @@ export class Hall {
     }
     for (const r of this.donnees.casinoTables()) {
       const v = trouverVille(r.ville);
-      if (this.salles.has(r.id) && v) this.casino.set(r.id, { jeu: r.jeu as Jeu, ville: v });
+      if (this.salles.has(r.id) && v) this.casino.set(r.id, { jeu: r.jeu as Jeu, ville: v, prive: this.salles.get(r.id)!.reglages.visibilite === 'privee' });
       else this.donnees.retirerCasino(r.id);
     }
   }
@@ -276,7 +281,7 @@ export class Hall {
     return {
       enLigne,
       table: {
-        code: s.code, nom: lieu ? `Casino de ${lieu.ville.nom}` : r.nom, jeu: jeuDe(s), ville: lieu?.ville.nom ?? null,
+        code: s.code, nom: lieu && !lieu.prive ? `Casino de ${lieu.ville.nom}` : r.nom, jeu: jeuDe(s), ville: lieu?.ville.nom ?? null,
         joueurs: r.joueurs, places: r.places, rejoignable: r.statut !== 'terminee' && r.joueurs < r.places,
       },
     };
@@ -284,6 +289,15 @@ export class Hall {
 
   /** Un message en direct pour un joueur connecté (amis). */
   notifier(u: number, m: MessageServeur) { this.envoyerMembre(`u${u}`, m); }
+
+  /** Le joueur a-t-il le Club ouvert sous les yeux ? */
+  estVisible(u: number) { const c = this.parMembre.get(`u${u}`); return !!c && c.visible; }
+  estConnecte(u: number) { return this.parMembre.has(`u${u}`); }
+
+  private inviterAmis(u: Utilisateur, pseudos: unknown) {
+    if (!Array.isArray(pseudos) || !pseudos.length || !this.surInviter) return;
+    try { this.surInviter(u.id, pseudos.slice(0, 5).map(String)); } catch (e) { console.error('Invitations', e); }
+  }
 
   private envoyerMembre(id: string, m: MessageServeur) {
     const c = this.parMembre.get(id);
@@ -319,9 +333,10 @@ export class Hall {
         this.envoyer(c, this.messageHall(id));
         return;
       case 'casino':
-        this.entrerCasino(c, u, msg.jeu, String(msg.ville));
+        if (this.entrerCasino(c, u, msg.jeu, String(msg.ville))) this.inviterAmis(u, msg.inviter);
         return;
       case 'creer': {
+        if (msg.casino) { if (this.creerPrivee(c, u, msg.jeu ?? 'poker', String(msg.casino))) this.inviterAmis(u, msg.inviter); return; }
         this.quitterSalle(id);
         const jeu: Jeu = msg.jeu === 'blackjack' || msg.jeu === 'roulette' ? msg.jeu : 'poker';
         const salleId = randomBytes(6).toString('base64url');
@@ -339,6 +354,7 @@ export class Hall {
         this.envoyer(c, { type: 'entre', id: salleId, code, jeu });
         s.diffuser();
         this.signalerHall();
+        this.inviterAmis(u, msg.inviter);
         return;
       }
       case 'rejoindre':
@@ -353,7 +369,10 @@ export class Hall {
         this.ouEst.set(id, s.id);
         this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: jeuDe(s), casino: this.nomCasino(s) });
         const dejaAssis = s.estMembre(id) && this.estAssis(s, id);
-        if (msg.type === 'regarder' || (this.casino.has(s.id) && !dejaAssis && (this.porte?.etat(u.id).solde ?? 0) < caveDe(this.casino.get(s.id)!.ville, this.casino.get(s.id)!.jeu))) s.regarder(membre(u));
+        const lieu = this.casino.get(s.id);
+        const sansLesMoyens = !!lieu && !dejaAssis && (this.porte?.etat(u.id).solde ?? 0) < caveDe(lieu.ville, lieu.jeu);
+        if (sansLesMoyens && msg.type === 'rejoindre') this.envoyer(c, { type: 'erreur', texte: `Table au niveau ${lieu!.ville.nom} : il te faut ${caveDe(lieu!.ville, lieu!.jeu).toLocaleString('fr-FR')} ♣ pour t'y asseoir. Tu peux regarder.` });
+        if (msg.type === 'regarder' || sansLesMoyens) s.regarder(membre(u));
         else {
           s.rejoindre(membre(u));
           if (this.casino.has(s.id) && !dejaAssis && this.estAssis(s, id) && !this.payerCave(s, id)) { s.partir(id); s.regarder(membre(u)); }
@@ -388,7 +407,7 @@ export class Hall {
 
   /* --------------------------- Casino --------------------------- */
 
-  private nomCasino(s: SalleJeu) { const c = this.casino.get(s.id); return c ? c.ville.nom : undefined; }
+  private nomCasino(s: SalleJeu) { const c = this.casino.get(s.id); return c ? (c.prive ? `${c.ville.nom} · privée` : c.ville.nom) : undefined; }
   private uid(id: string) { return idUtilisateur(id); }
 
   /** Jetons d'un joueur assis à une table (ceux qui retournent au portefeuille s'il se lève). */
@@ -405,7 +424,7 @@ export class Hall {
     const c = this.casino.get(s.id), u = this.uid(id);
     if (!c || u === null || !this.porte) return;
     const n = this.jetonsDe(s, id);
-    if (n > 0) this.porte.crediter(u, n, `Retour de ${c.ville.nom}`);
+    if (n > 0) { this.porte.crediter(u, n, `Retour de ${c.prive ? 'table privée' : c.ville.nom}`); if (c.prive) this.surFluxPrive?.(u, n); }
   }
 
   /** Prélève la cave pour s'asseoir ; faux si le portefeuille ne suffit pas. */
@@ -414,7 +433,8 @@ export class Hall {
     if (!c || u === null || !this.porte) return false;
     const cave = caveDe(c.ville, c.jeu);
     if (this.porte.etat(u).solde < cave) return false;
-    this.porte.crediter(u, -cave, `Cave ${c.ville.nom}`);
+    this.porte.crediter(u, -cave, `Cave ${c.prive ? 'table privée' : c.ville.nom}`);
+    if (c.prive) this.surFluxPrive?.(u, -cave);
     return true;
   }
 
@@ -429,16 +449,16 @@ export class Hall {
   }
 
   /** Va s'asseoir à une table de la ville (en en créant une si besoin). */
-  private entrerCasino(c: Client, u: Utilisateur, jeu: Jeu, idVille: string) {
+  private entrerCasino(c: Client, u: Utilisateur, jeu: Jeu, idVille: string): boolean {
     const v = trouverVille(idVille);
-    if (!v || !['poker', 'blackjack', 'roulette'].includes(jeu)) return this.envoyer(c, { type: 'erreur', texte: 'Ville inconnue' });
+    if (!v || !['poker', 'blackjack', 'roulette'].includes(jeu)) { this.envoyer(c, { type: 'erreur', texte: 'Ville inconnue' }); return false; }
     const id = memId(u);
-    if (!this.porte) return this.envoyer(c, { type: 'erreur', texte: 'Le Casino est fermé' });
+    if (!this.porte) { this.envoyer(c, { type: 'erreur', texte: 'Le Casino est fermé' }); return false; }
     const cave = caveDe(v, jeu);
-    if (this.porte.etat(u.id).solde < cave) return this.envoyer(c, { type: 'erreur', texte: `Il te faut ${cave.toLocaleString('fr-FR')} ♣ pour t'asseoir à ${v.nom}` });
+    if (this.porte.etat(u.id).solde < cave) { this.envoyer(c, { type: 'erreur', texte: `Il te faut ${cave.toLocaleString('fr-FR')} ♣ pour t'asseoir à ${v.nom}` }); return false; }
     this.quitterSalle(id);
     let s = [...this.casino.entries()].map(([sid, x]) => ({ t: this.salles.get(sid), x }))
-      .find(({ t, x }) => t && x.jeu === jeu && x.ville.id === v.id && t.statut !== 'terminee' && t.resume().joueurs < t.reglages.places)?.t;
+      .find(({ t, x }) => t && !x.prive && x.jeu === jeu && x.ville.id === v.id && t.statut !== 'terminee' && t.resume().joueurs < t.reglages.places)?.t;
     if (!s) {
       const salleId = randomBytes(6).toString('base64url');
       let code = genererCode();
@@ -456,12 +476,49 @@ export class Hall {
       this.donnees?.ajouterCasino(salleId, jeu, v.id);
     } else s.rejoindre(membre(u));
     this.ouEst.set(id, s.id);
-    if (!this.payerCave(s, id)) { this.ouEst.delete(id); s.partir(id); return this.envoyer(c, { type: 'erreur', texte: 'Portefeuille insuffisant' }); }
+    if (!this.payerCave(s, id)) { this.ouEst.delete(id); s.partir(id); this.envoyer(c, { type: 'erreur', texte: 'Portefeuille insuffisant' }); return false; }
     this.envoyer(c, { type: 'entre', id: s.id, code: s.code, jeu: jeuDe(s), casino: v.nom });
     this.demarrerCasino(s);
     s.diffuser();
     this.planifierSauvegarde(s);
     this.signalerHall();
+    return true;
+  }
+
+  /**
+   * Table privée entre potes, en vrais Clubs : mêmes enjeux qu'une ville du Casino (qu'il faut avoir les moyens
+   * de rejoindre), on y entre avec le code ou une invitation. Pas de bots : l'argent ne circule qu'entre joueurs.
+   */
+  private creerPrivee(c: Client, u: Utilisateur, jeuDemande: Jeu, idVille: string): boolean {
+    const v = trouverVille(idVille);
+    const jeu: Jeu = jeuDemande === 'blackjack' || jeuDemande === 'roulette' ? jeuDemande : 'poker';
+    if (!v) { this.envoyer(c, { type: 'erreur', texte: 'Niveau de table inconnu' }); return false; }
+    if (!this.porte) { this.envoyer(c, { type: 'erreur', texte: 'Le Casino est fermé' }); return false; }
+    const cave = caveDe(v, jeu);
+    if (this.porte.etat(u.id).solde < cave) { this.envoyer(c, { type: 'erreur', texte: `Il te faut ${cave.toLocaleString('fr-FR')} ♣ pour ouvrir une table au niveau ${v.nom}` }); return false; }
+    const id = memId(u);
+    this.quitterSalle(id);
+    const salleId = randomBytes(6).toString('base64url');
+    let code = genererCode();
+    while (this.parCode.has(code)) code = genererCode();
+    const r = { ...reglagesCasino(v, jeu), nom: `Table de ${u.pseudo} · ${v.nom}`, visibilite: 'privee' as const };
+    const s: SalleJeu = jeu === 'blackjack'
+      ? new SalleBJ({ id: salleId, code, hote: membre(u), reglages: { ...REGLAGES_BJ_DEFAUT, ...r } as ReglagesBJ, sortie: this.sortieCasino() })
+      : jeu === 'roulette'
+      ? new SalleRoulette({ id: salleId, code, hote: membre(u), reglages: { ...REGLAGES_ROULETTE_DEFAUT, ...r } as ReglagesRoulette, sortie: this.sortieCasino() })
+      : new Salle({ id: salleId, code, hote: membre(u), reglages: { ...REGLAGES_DEFAUT, ...r } as ReglagesSalle, sortie: this.sortie(() => s as Salle) });
+    this.salles.set(salleId, s);
+    this.parCode.set(code, s);
+    this.casino.set(salleId, { jeu, ville: v, prive: true });
+    this.donnees?.ajouterCasino(salleId, jeu, v.id);
+    this.ouEst.set(id, salleId);
+    if (!this.payerCave(s, id)) { this.supprimer(s); this.envoyer(c, { type: 'erreur', texte: 'Portefeuille insuffisant' }); return false; }
+    this.envoyer(c, { type: 'entre', id: salleId, code, jeu, casino: `${v.nom} · privée` });
+    this.demarrerCasino(s);
+    s.diffuser();
+    this.planifierSauvegarde(s);
+    this.signalerHall();
+    return true;
   }
 
   /** Commandes envoyées à une table du Casino : l'argent passe par le portefeuille. Vrai si déjà traitée. */
@@ -483,14 +540,14 @@ export class Hall {
     if (cmd.c === 'lever') {
       const avant = this.jetonsDe(s, id);
       commande(cmd);
-      if (!this.estAssis(s, id) && avant > 0) this.porte.crediter(u, avant, `Retour de ${x.ville.nom}`);
+      if (!this.estAssis(s, id) && avant > 0) { this.porte.crediter(u, avant, `Retour de ${x.prive ? 'table privée' : x.ville.nom}`); if (x.prive) this.surFluxPrive?.(u, avant); }
       return true;
     }
     if (cmd.c === 'recave') {
       const avant = this.jetonsDe(s, id);
       if (!this.payerCave(s, id)) { this.envoyer(c, { type: 'salle', msg: { type: 'erreur', texte: 'Pas assez de Clubs pour te recaver' } }); return true; }
       commande(cmd);
-      if (this.jetonsDe(s, id) <= avant) this.porte.crediter(u, cave, 'Recave annulée');
+      if (this.jetonsDe(s, id) <= avant) { this.porte.crediter(u, cave, 'Recave annulée'); if (x.prive) this.surFluxPrive?.(u, cave); }
       this.demarrerCasino(s);
       return true;
     }
@@ -536,7 +593,7 @@ export class Hall {
       .map((s) => s.resume())
       .sort((a, b) => Number(b.statut === 'attente') - Number(a.statut === 'attente') || b.humains - a.humains);
     const villes: Record<string, number> = {};
-    for (const [sid, x] of this.casino) { const t = this.salles.get(sid); if (t) villes[`${x.jeu}:${x.ville.id}`] = (villes[`${x.jeu}:${x.ville.id}`] ?? 0) + t.resume().humains; }
+    for (const [sid, x] of this.casino) { if (x.prive) continue; const t = this.salles.get(sid); if (t) villes[`${x.jeu}:${x.ville.id}`] = (villes[`${x.jeu}:${x.ville.id}`] ?? 0) + t.resume().humains; }
     return { type: 'hall', tables, enLigne: this.parMembre.size, villes };
   }
 

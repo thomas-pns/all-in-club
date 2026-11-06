@@ -19,7 +19,9 @@ import { avatarSVG } from '../art/avatars';
 import { jouerSon } from '../vue/son';
 import { $, $$, esc, html, toast, panneau, avatar, avecPieces, logoHTML } from './commun';
 import { vueVitrine, vueTicket, vueKeno, vueLoto, ContexteKiosque } from './kiosque';
-import { vueAmis } from './amis';
+import { vueAmis, choisirAmis } from './amis';
+import { ouvrirCloche, type Notif } from './cloche';
+import { ouvrirAdmin } from './admin';
 import type { TypeTicket } from '../../../moteur/kiosque';
 import { VILLES, Ville } from '../../../moteur/casino';
 
@@ -31,7 +33,8 @@ export interface ActionsHall {
   solo: (jeu?: JeuCasino) => void;
   profil: () => void;
   joueurs: () => void;
-  casino: (jeu: JeuCasino, ville: string) => void;
+  casino: (jeu: JeuCasino, ville: string, inviter?: string[]) => void;
+  creerPrivee: (jeu: JeuCasino, ville: string, inviter: string[]) => void;
 }
 
 interface EtatPortefeuille { solde: number; tickets: number; bonus: EtatBonus & { calendrier: JourSerie[] }; toursBonus: number; coupDePouce: boolean }
@@ -75,6 +78,7 @@ export class EcranHall {
       <header class="club-entete">
         <button class="logo-club" data-accueil aria-label="All-In Club : retour à la rue">${logoHTML()}</button>
         <button class="porte-monnaie" data-porte aria-label="Mon portefeuille"><span class="piece">♣</span><b data-solde>…</b></button>
+        <button class="cloche" data-cloche aria-label="Notifications"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0112 0v5l2 2H4z"/><path d="M10 20a2 2 0 004 0"/></svg><i class="badge" data-badge-cloche hidden></i></button>
         <button class="club-moi" data-profil aria-label="Mon profil (${esc(u.pseudo)})">${avatarSVG(u.avatar, 'content', 42, { cadre: u.cadre })}</button>
       </header>
       <main class="club-contenu" data-contenu></main>
@@ -86,6 +90,7 @@ export class EcranHall {
     $('[data-profil]', this.el).onclick = () => a.profil();
     $('[data-accueil]', this.el).onclick = () => { if (memoire.onglet === 'club' && !memoire.jeu && !memoire.salon) return; memoire = { onglet: 'club', jeu: null }; this.afficher(); };
     $('[data-porte]', this.el).onclick = () => this.ouvrirPortefeuille();
+    $('[data-cloche]', this.el).onclick = () => { jouerSon('clic'); ouvrirCloche(this.annonces, (code) => this.a.rejoindreCode(code), () => this.badgeCloche(0)); };
     $$('[data-onglet]', this.el).forEach((b) => b.onclick = () => {
       const o = b.dataset.onglet!;
       if (o === 'profil') return a.profil();
@@ -96,6 +101,42 @@ export class EcranHall {
     this.afficher();
     void this.chargerPortefeuille();
     void this.majBadgeAmis();
+    void this.majCloche();
+    void api<{ admin: boolean }>('/api/admin/moi').then((r) => { this.admin = r.admin; if (memoire.onglet === 'club' && !memoire.jeu && !memoire.salon) this.majPiedPlan(); }).catch(() => {});
+    // La roue telle que réglée par l'admin
+    void api<{ roue: typeof ROUE }>('/api/roue').then((r) => { if (r.roue?.length === ROUE.length) ROUE.splice(0, ROUE.length, ...r.roue); }).catch(() => {});
+  }
+
+  private admin = false;
+  /** Les potes qu'on emmène au Casino (invités dès qu'on s'assoit). */
+  private potes: string[] = [];
+
+  /* ------------------------------ La cloche ------------------------------ */
+
+  private badgeCloche(n: number) {
+    const b = this.el.querySelector('[data-badge-cloche]') as HTMLElement | null;
+    if (!b) return;
+    b.hidden = !n;
+    b.textContent = n > 9 ? '9+' : String(n);
+  }
+
+  private async majCloche() {
+    try { const d = await api<{ nonLues: number }>('/api/boite'); this.badgeCloche(d.nonLues); } catch { /* rien */ }
+  }
+
+  /** Une notification arrive en direct (le contenu est dans la cloche). */
+  nouvelleNotif(_n: Notif, nonLues: number) {
+    this.badgeCloche(nonLues);
+    const c = this.el.querySelector('[data-cloche]');
+    c?.classList.remove('sonne'); void (c as HTMLElement | null)?.offsetWidth; c?.classList.add('sonne');
+  }
+
+  private majPiedPlan() {
+    const z = this.el.querySelector('[data-pied-plan]') as HTMLElement | null;
+    if (!z) return;
+    z.innerHTML = this.admin ? '<button class="btn btn-petit btn-fantome" data-admin>🛠️ Mode admin</button>' : '';
+    const b = z.querySelector('[data-admin]') as HTMLElement | null;
+    if (b) b.onclick = () => ouvrirAdmin(() => this.rafraichirPortefeuille());
   }
 
   /* ------------------------------ Données ------------------------------ */
@@ -149,7 +190,9 @@ export class EcranHall {
       <div class="rue-cadre"><div class="rue-defile" data-rue>${sceneRue(momentParis())}</div></div>
       <div class="missions-carte" data-missions><span class="doux petit">Missions du jour…</span></div>
       <p class="doux petit plan-legende" data-enligne></p>
+      <div class="pied-plan" data-pied-plan></div>
     </div>`;
+    this.majPiedPlan();
     const rue = $('[data-rue]', c);
     rue.addEventListener('click', (e) => {
       const cible = e.target as Element;
@@ -479,39 +522,84 @@ export class EcranHall {
       <div class="onglets-jeux">${(['poker', 'blackjack', 'roulette'] as JeuCasino[]).map((j) => `<button data-seg="${j}" class="j-${j} ${j === jeu ? 'on' : ''}"><span class="ico">${icone(j)}</span>${NOMS[j]}</button>`).join('')}</div>
       <div class="decor-salle"><div class="tapis-salle">${deco[jeu]}</div></div>
       <button class="apprendre-salle" data-apprendre><span>🎓</span><span><b>Apprendre à jouer ${jeu === 'roulette' ? 'à la' : 'au'} ${NOMS[jeu]}</b><small>Une leçon de 2 minutes, avec des mises en situation</small></span><i>›</i></button>
+      <button class="apprendre-salle bots" data-bots><span>🤖</span><span><b>S'entraîner contre des bots</b><small>Une partie solo, sans miser un seul Club</small></span><i>›</i></button>
       <h3 class="titre-rubrique">Choisis ta ville</h3>
       <p class="doux petit" style="margin:0 0 10px">Ici on joue avec tes vrais Clubs <i class="pc"></i> : la cave est prélevée sur ton portefeuille, et en te levant tes jetons y retournent.</p>
+      <div class="avec-potes" data-potes></div>
       <div class="villes" data-villes></div>
-      <button class="vers-salon" data-vers-salon><span class="neon-mini">Entre potes</span><span><b>Envie de jouer sans miser tes Clubs ?</b><small>Au salon Entre potes : jetons offerts, tes règles, une table rien que pour tes potes.</small></span><i>›</i></button>
+      <button class="vers-salon" data-vers-salon><span class="neon-mini">Entre potes</span><span><b>Une table rien qu'à vous ?</b><small>Au salon Entre potes : pour le fun avec des jetons offerts, ou en vrais Clubs entre amis.</small></span><i>›</i></button>
     </div>`;
     $('[data-retour]', c).onclick = () => this.retourRue('casino');
     $$('[data-seg]', c).forEach((b) => b.onclick = () => { jouerSon('clic'); memoire.jeu = b.dataset.seg as JeuCasino; this.afficher(); });
     $('[data-apprendre]', c).onclick = () => ouvrirApprendre(jeu, (j) => this.a.solo(j));
+    $('[data-bots]', c).onclick = () => this.a.solo(jeu);
+    this.majPotes();
     $('[data-vers-salon]', c).onclick = () => { jouerSon('clic'); memoire = { onglet: 'club', jeu: null, salon: jeu }; this.afficher(); this.el.querySelector('[data-contenu] > *')?.classList.add('arrivee'); };
     this.majVilles();
   }
 
-  /** Le salon Entre potes : les parties perso, avec des jetons offerts. */
+  /** « Jouer avec des potes » : on choisit ses amis, ils sont invités dès qu'on est assis. */
+  private majPotes() {
+    const z = this.el.querySelector('[data-potes]') as HTMLElement | null;
+    if (!z) return;
+    z.innerHTML = this.potes.length
+      ? `<span class="potes-choisis">👥 Avec ${this.potes.map((p) => `<b>${esc(p)}</b>`).join(', ')}</span><button class="btn btn-petit btn-fantome" data-modif-potes>Modifier</button><button class="btn btn-petit btn-fantome" data-sans-potes aria-label="Jouer seul">✕</button>`
+      : `<button class="btn btn-ciel btn-plein" data-modif-potes>👥 Jouer avec des potes</button>`;
+    $('[data-modif-potes]', z).onclick = async () => { const r = await choisirAmis(this.potes); if (r) { this.potes = r; this.majPotes(); if (r.length) toast('Choisis ta ville : ils seront invités à ta table'); } };
+    const sans = z.querySelector('[data-sans-potes]') as HTMLElement | null;
+    if (sans) sans.onclick = () => { this.potes = []; this.majPotes(); };
+  }
+
+  /** Le salon Entre potes : sa table à soi, pour le fun (jetons offerts) ou en vrais Clubs. */
   private vueSalon(c: HTMLElement, jeu: JeuCasino) {
+    const solde = this.porte?.solde ?? 0;
+    let niveau = VILLES[0].id as string;
     c.innerHTML = `<div class="page-batiment page-salon">
       <div class="fronton">
         <button class="btn btn-rond btn-fantome" data-retour aria-label="Retour à la rue">←</button>
         <div class="enseigne-salon">Entre potes</div>
       </div>
-      <div class="intro-salon">
-        <p><b>Ici, rien n'est en jeu.</b> Jetons offerts, ton portefeuille n'est jamais touché. Tu choisis les règles et tu invites tes potes avec un code.</p></div>
+      <div class="decor-salon" aria-hidden="true">${decorSalon()}</div>
       <div class="onglets-jeux salon">${(['poker', 'blackjack', 'roulette'] as JeuCasino[]).map((j) => `<button data-seg="${j}" class="j-${j} ${j === jeu ? 'on' : ''}"><span class="ico">${icone(j)}</span>${NOMS[j]}</button>`).join('')}</div>
-      <div class="actions-salon">
-        <button class="btn btn-or btn-plein" data-creer>＋ Créer une table de ${NOMS[jeu]}</button>
-        <div class="deux"><button class="btn btn-ciel" data-code>Rejoindre avec un code</button><button class="btn" data-solo>S'entraîner en solo</button></div>
+      <div class="modes-salon">
+        <section class="mode-salon fun">
+          <h3>🎈 Pour le fun</h3>
+          <p>Jetons offerts, ton portefeuille n'est jamais touché. Tu choisis toutes les règles.</p>
+          <button class="btn btn-or btn-plein" data-creer>Créer une table de ${NOMS[jeu]}</button>
+        </section>
+        <section class="mode-salon clubs">
+          <h3><i class="pc"></i> En vrais Clubs</h3>
+          <p>Chacun paie sa cave et repart avec ce qu'il a devant lui. Mêmes enjeux qu'au Casino : il faut avoir de quoi s'asseoir.</p>
+          <div class="niveaux" data-niveaux></div>
+          <div class="avec-potes" data-potes-salon></div>
+          <button class="btn btn-or btn-plein" data-privee>Ouvrir la table</button>
+        </section>
       </div>
+      <button class="btn btn-ciel btn-plein" data-code style="margin-top:12px">Rejoindre avec un code</button>
       <div class="ligne" style="justify-content:space-between;margin:18px 0 10px"><h2 style="font-size:20px">Tables ouvertes</h2><span class="doux petit" data-enligne></span></div>
       <div data-tables></div>
     </div>`;
+    const enjeux = (v: Ville) => jeu === 'poker' ? `${fmt(v.poker.pb)}/${fmt(v.poker.pb * 2)}` : jeu === 'blackjack' ? `${fmt(v.blackjack.miseMin)}–${fmt(v.blackjack.miseMax)}` : `min. ${fmt(v.roulette.miseMin)}`;
+    let invites: string[] = [];
+    const majNiveaux = () => {
+      $('[data-niveaux]', c).innerHTML = VILLES.map((v) => {
+        const ferme = v[jeu].cave > solde;
+        return `<button class="niveau ${v.id === niveau ? 'on' : ''}" data-niveau="${v.id}" style="--c:${v.couleur}" ${ferme ? 'disabled' : ''}>
+          <b>${v.nom}</b><small>${enjeux(v)}</small><small>Cave ${clubs(v[jeu].cave)}</small>${ferme ? '<span class="cadenas">🔒</span>' : ''}</button>`;
+      }).join('');
+      $$('[data-niveau]', c).forEach((b) => b.onclick = () => { niveau = b.dataset.niveau!; jouerSon('clic'); majNiveaux(); });
+      const z = $('[data-potes-salon]', c);
+      z.innerHTML = invites.length
+        ? `<span class="potes-choisis">👥 ${invites.map((p) => `<b>${esc(p)}</b>`).join(', ')}</span><button class="btn btn-petit btn-fantome" data-inv>Modifier</button>`
+        : `<button class="btn btn-petit btn-fantome" data-inv>👥 Inviter des potes</button>`;
+      $('[data-inv]', z).onclick = async () => { const r = await choisirAmis(invites, 'Ils recevront une invitation dès que la table sera ouverte.'); if (r) { invites = r; majNiveaux(); } };
+      ($('[data-privee]', c) as HTMLButtonElement).disabled = VILLES.every((v) => v[jeu].cave > solde);
+    };
+    majNiveaux();
     $('[data-retour]', c).onclick = () => this.retourRue('salon');
     $$('[data-seg]', c).forEach((b) => b.onclick = () => { jouerSon('clic'); memoire.salon = b.dataset.seg as JeuCasino; this.afficher(); });
     $('[data-creer]', c).onclick = () => this.a.creer(jeu);
-    $('[data-solo]', c).onclick = () => this.a.solo(jeu);
+    $('[data-privee]', c).onclick = () => { jouerSon('jetons'); this.a.creerPrivee(jeu, niveau, invites); };
     $('[data-code]', c).onclick = () => this.demanderCode();
     this.majListe();
     this.majComptes();
@@ -597,7 +685,7 @@ export class EcranHall {
         <div class="bas-ville"><span class="enjeux-ville"><b>${enjeux(v)}</b><small><span class="nowrap">Cave ${clubs(cave)}</span> · ${esc(v.accroche)}</small></span>
           <button class="btn btn-petit ${manque > 0 ? '' : 'btn-or'}" data-ville="${v.id}" ${manque > 0 ? 'disabled' : ''}>S'asseoir</button></div></div>`;
     }).join('');
-    $$('[data-ville]', zone).forEach((b) => b.onclick = () => { jouerSon('jetons'); this.a.casino(jeu, b.dataset.ville!); });
+    $$('[data-ville]', zone).forEach((b) => b.onclick = () => { jouerSon('jetons'); const p = this.potes; this.potes = []; this.a.casino(jeu, b.dataset.ville!, p); });
   }
 
   private majListe() {
@@ -626,4 +714,30 @@ export class EcranHall {
     $$('[data-rejoindre]', zone).forEach((b) => b.onclick = () => this.a.rejoindre(b.dataset.rejoindre!));
     $$('[data-regarder]', zone).forEach((b) => b.onclick = () => this.a.regarder(b.dataset.regarder!));
   }
+}
+
+/** Le décor du salon : un coin canapé, une lampe, la table des potes. */
+function decorSalon() {
+  const T = '#2A1E3F', st = `stroke="${T}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"`;
+  const potes = [[120, '#8EE07A', '#43B072'], [190, '#FFC23D', '#E59A12'], [410, '#FF9AC1', '#E5484D'], [480, '#46C2F0', '#2E7FB8']] as const;
+  return `<svg viewBox="0 0 600 190" preserveAspectRatio="xMidYMax slice">
+    <rect width="600" height="190" fill="#6B3F5E"/>
+    ${Array.from({ length: 13 }, (_, i) => `<rect x="${i * 48}" y="0" width="24" height="140" fill="#734566"/>`).join('')}
+    <rect x="0" y="140" width="600" height="50" fill="#8A5A3C"/>
+    ${Array.from({ length: 8 }, (_, i) => `<path d="M${i * 80} 140 v50" stroke="#7A4C31" stroke-width="2"/>`).join('')}
+    <rect x="34" y="26" width="92" height="70" rx="6" fill="#2E2840" ${st}/><rect x="40" y="32" width="80" height="58" rx="3" fill="#46C2F0"/><circle cx="96" cy="50" r="10" fill="#FFF4DF"/>
+    <path d="M40 90 l26 -26 l18 16 l14 -10 l22 20z" fill="#43B072"/>
+    <rect x="476" y="20" width="84" height="56" rx="6" fill="#FFC23D" ${st}/><text x="518" y="54" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="700" font-size="17" fill="${T}">ALL-IN</text>
+    <path d="M300 0 v34" stroke="${T}" stroke-width="2"/><path d="M270 54 q30 -34 60 0z" fill="#FF6B5B" ${st}/>
+    <path d="M272 54 l-48 92 h152 l-48 -92z" fill="#FFF4DF" opacity=".22" class="halo-lampe"/>
+    ${potes.map(([x, c, h], i) => `<g class="pote-salon" style="animation-delay:${i * 0.6}s;transform-origin:${x}px 150px">
+      <path d="M${x - 24} 168 q0 -38 24 -38 q24 0 24 38z" fill="${h}" ${st}/>
+      <circle cx="${x}" cy="106" r="22" fill="${c}" ${st}/>
+      <circle cx="${x - 7}" cy="102" r="3" fill="${T}"/><circle cx="${x + 7}" cy="102" r="3" fill="${T}"/>
+      <path d="M${x - 8} 113 q8 6 16 0" fill="none" stroke="${T}" stroke-width="2.5" stroke-linecap="round"/></g>`).join('')}
+    <path d="M150 152 q150 -30 300 0 v14 q-150 26 -300 0z" fill="#25A05C" ${st}/>
+    <path d="M150 166 q150 26 300 0 v10 q-150 24 -300 0z" fill="#7A4C31" ${st}/>
+    ${[270, 288, 306, 324].map((x, i) => `<rect x="${x}" y="139" width="15" height="21" rx="3" fill="#FFF4DF" ${st} transform="rotate(${(i - 1.5) * 6} ${x + 7} 150)"/>`).join('')}
+    ${[[210, '#E5484D'], [222, '#46C2F0'], [380, '#FFC23D'], [392, '#8E5BD6']].map(([x, c]) => `<ellipse cx="${x}" cy="152" rx="8" ry="4" fill="${c}" ${st}/><ellipse cx="${x}" cy="147" rx="8" ry="4" fill="${c}" ${st}/>`).join('')}
+  </svg>`;
 }

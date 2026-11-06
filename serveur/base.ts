@@ -40,5 +40,8 @@ export function ouvrirBase(chemin: string): Base {
     );
     CREATE INDEX IF NOT EXISTS sessions_utilisateur ON sessions(utilisateur);
   `);
+  // Comptes de test (mode admin) : rien ne leur est débité, et ils n'apparaissent ni au classement ni dans les annonces
+  const cols = (db.prepare('PRAGMA table_info(utilisateurs)').all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes('test')) db.exec('ALTER TABLE utilisateurs ADD COLUMN test INTEGER NOT NULL DEFAULT 0');
   return db;
 }

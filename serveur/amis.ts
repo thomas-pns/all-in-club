@@ -150,10 +150,10 @@ export class Amis {
     const ici = this.presence(u).table;
     if (!ici) throw new ErreurAmis('Tu dois être à une table pour inviter');
     const lui = this.presence(v.id);
-    if (!lui.enLigne) throw new ErreurAmis(`${v.pseudo} n'est pas connecté`);
     const moi = this.personne(u);
+    // Hors ligne, l'invitation l'attend dans sa cloche (et sur son téléphone s'il a les notifications)
     this.notifier(v.id, { type: 'amis', evenement: 'invitation', de: { pseudo: moi.pseudo, avatar: moi.avatar, cadre: moi.cadre }, table: ici });
-    return { ok: true };
+    return { ok: true, enLigne: lui.enLigne };
   }
 }
 

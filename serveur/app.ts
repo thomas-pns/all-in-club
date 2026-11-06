@@ -19,9 +19,12 @@ import { Activites } from './activites.js';
 import { Amis, ErreurAmis } from './amis.js';
 import { ROUE } from '../moteur/bonus.js';
 import { Kiosque, fmtClubs } from './kiosque.js';
+import { Boite } from './boite.js';
+import { Administration, ErreurAdmin } from './administration.js';
+import type { MessageAmi } from './amis.js';
 import { TICKETS, KENO, KENO_GAINS, LOTO, LOTO_GAINS } from '../moteur/kiosque.js';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.4.0';
 
 export interface OptionsServeur {
   db: Base;
@@ -60,8 +63,27 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   const hall = new Hall(donnees, notifications, portefeuilles, activites);
   hall.restaurer();
   const amis = new Amis(o.db, portefeuilles);
+  const boite = new Boite(o.db);
+  const admin = new Administration(o.db, comptes, portefeuilles);
   amis.presence = (u) => hall.presence(u);
-  amis.notifier = (u, m) => hall.notifier(u, m);
+  /** Ce qui arrive à un joueur : en direct s'il est là, et dans sa cloche (+ sur son téléphone s'il n'a pas le Club sous les yeux). */
+  const prevenir = (u: number, genre: 'demande' | 'accepte' | 'cadeau' | 'invitation' | 'tirage', titre: string, texte: string, code: string | null = null) => {
+    boite.ajouter(u, genre, titre, texte, code);
+    if (!hall.estVisible(u)) void notifications.envoyer(u, titre, texte, genre).catch(() => {});
+  };
+  amis.notifier = (u, m: MessageAmi) => {
+    hall.notifier(u, m);
+    const de = m.de.pseudo;
+    if (m.evenement === 'demande') prevenir(u, 'demande', "Demande d'ami", `${de} veut être ton ami`);
+    else if (m.evenement === 'accepte') prevenir(u, 'accepte', 'Nouvel ami', `${de} a accepté ta demande`);
+    else if (m.evenement === 'cadeau') prevenir(u, 'cadeau', 'Cadeau !', `${de} t'offre ${fmtClubs(m.montant ?? 0)}`);
+    else if (m.evenement === 'invitation' && m.table) prevenir(u, 'invitation', 'Invitation', `${de} t'invite à sa table : ${m.table.nom}`, m.table.code);
+  };
+  boite.surNouvelle = (u, n) => hall.notifier(u, { type: 'notif', notif: n, nonLues: boite.nonLues(u) });
+  // Un gain au Keno ou au Loto alors qu'on n'est pas là pour voir le tirage
+  kiosque.surGainTirage = (u, jeu, _gain, texte) => { if (!hall.estConnecte(u)) prevenir(u, 'tirage', `Gagné au ${jeu} !`, texte); };
+  hall.surInviter = (u, pseudos) => { for (const p of pseudos) { try { amis.inviter(u, p); } catch { /* pas ami, etc. */ } } };
+  hall.surFluxPrive = (u, montant) => admin.fluxPrive(u, montant);
   const limiteAuth = limiteur(10, 5 * 60_000);
   const limiteMail = limiteur(3, 15 * 60_000);
 
@@ -69,7 +91,7 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
 
   app.setErrorHandler((e, _req, rep) => {
     if (e instanceof ErreurCompte) return rep.code(e.code).send({ erreur: e.message });
-    if (e instanceof ErreurPortefeuille || e instanceof ErreurAmis) return rep.code(400).send({ erreur: e.message });
+    if (e instanceof ErreurPortefeuille || e instanceof ErreurAmis || e instanceof ErreurAdmin) return rep.code(400).send({ erreur: e.message });
     if ((e as any).validation || (e as any).statusCode === 400) return rep.code(400).send({ erreur: 'Requête invalide' });
     app.log.error(e);
     return rep.code(500).send({ erreur: 'Erreur interne' });
@@ -116,6 +138,29 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   app.delete('/api/amis/:pseudo', async (req) => amis.retirer(exigerUtilisateur(req).id, pseudoDe(req)));
   app.post('/api/amis/:pseudo/cadeau', async (req) => amis.offrir(exigerUtilisateur(req).id, pseudoDe(req), ((req.body ?? {}) as { montant?: unknown }).montant));
   app.post('/api/amis/:pseudo/inviter', async (req) => amis.inviter(exigerUtilisateur(req).id, pseudoDe(req)));
+  /* La cloche */
+  app.get('/api/boite', async (req) => boite.liste(exigerUtilisateur(req).id));
+  app.post('/api/boite/lu', async (req) => boite.toutLu(exigerUtilisateur(req).id));
+  /* La Grande Roue telle que réglée (le client la dessine) */
+  app.get('/api/roue', async () => ({ roue: ROUE }));
+
+  /* Le mode admin */
+  const exigerAdmin = (req: FastifyRequest) => {
+    const u = exigerUtilisateur(req);
+    if (!admin.estAdmin(u)) throw new ErreurCompte('Réservé à l\'administrateur', 403);
+    return u;
+  };
+  const idDe = (req: { params: unknown }) => Number((req.params as { id?: string }).id);
+  app.get('/api/admin/moi', async (req) => ({ admin: admin.estAdmin(exigerUtilisateur(req)) }));
+  app.get('/api/admin/joueurs', async (req) => { exigerAdmin(req); return admin.joueurs((u) => hall.estConnecte(u)); });
+  app.post('/api/admin/joueurs/:id/clubs', async (req) => { exigerAdmin(req); const b = (req.body ?? {}) as { montant?: unknown; motif?: unknown }; return admin.crediter(idDe(req), b.montant, b.motif); });
+  app.post('/api/admin/joueurs/:id/test', async (req) => { exigerAdmin(req); return admin.basculerTest(idDe(req)); });
+  app.post('/api/admin/joueurs/:id/mdp', async (req) => { exigerAdmin(req); return admin.motDePasseProvisoire(idDe(req)); });
+  app.post('/api/admin/test', async (req) => { exigerAdmin(req); return admin.creerTest(); });
+  app.get('/api/admin/surveillance', async (req) => { exigerAdmin(req); return admin.surveillance(); });
+  app.get('/api/admin/reglages', async (req) => { exigerAdmin(req); return admin.reglages(); });
+  app.put('/api/admin/reglages', async (req) => { exigerAdmin(req); return admin.modifierReglages((req.body ?? {}) as never); });
+
   app.get('/api/missions', async (req) => activites.missions(exigerUtilisateur(req).id));
   app.get('/api/annonces', async (req) => { exigerUtilisateur(req); return { annonces: activites.annonces() }; });
   app.post('/api/portefeuille/coup-de-pouce', async (req) => portefeuilles.coupDePouce(exigerUtilisateur(req).id));

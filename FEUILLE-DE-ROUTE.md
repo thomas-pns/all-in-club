@@ -12,14 +12,14 @@ Retours de Thomas du 06/11/2026 (version 0.3.1). Cocher au fur et à mesure.
 - [ ] PC : enlever le cadre de sélection qui apparaît au survol/clic des bâtiments (garder le contour au clavier : la navigation Tab est appréciée).
 
 ## Fonctions
-- [ ] **Notifications** : un petit menu sobre (cloche) avec l'historique : gains au Loto/Keno quand on n'était pas là, invitations, demandes d'amis, cadeaux, gros gains des autres (gain très improbable, au-dessus d'un seuil). Notification push sur téléphone si le joueur est parti (ex. tirage du Loto).
+- [x] (v0.4.0) **Notifications** : un petit menu sobre (cloche) avec l'historique : gains au Loto/Keno quand on n'était pas là, invitations, demandes d'amis, cadeaux, gros gains des autres (gain très improbable, au-dessus d'un seuil). Notification push sur téléphone si le joueur est parti (ex. tirage du Loto).
 - [ ] **Boutique** (5ᵉ onglet) : avatars, cadres, tapis, dos de cartes, jetons, émotes ; éléments visibles chez les amis ; personnages personnalisés. Objectif : des choses à faire avec beaucoup de Clubs.
-- [ ] **Mode administrateur** (compte de Thomas seulement) :
+- [x] (v0.4.0) **Mode administrateur** (compte de Thomas seulement) :
   - gérer les missions du jour (ajouter/modifier la liste des missions possibles, récompenses) ;
   - régler la Grande Roue et la série (cases, multiplicateurs, tickets) ;
   - mode test : ne pas perdre de Clubs, créer des comptes de test (ex. pour tester les amis sans jouer à deux endroits) ;
   - gestion des joueurs.
-- [ ] **Page de bienvenue** `/bienvenue` : ce qu'est l'appli (jeux avec de l'argent fictif), comment l'installer sur iPhone (Partager > Sur l'écran d'accueil) et Android.
+- [x] (v0.4.0) **Page de bienvenue** `/bienvenue` : ce qu'est l'appli (jeux avec de l'argent fictif), comment l'installer sur iPhone (Partager > Sur l'écran d'accueil) et Android.
 - [ ] **Paris sportifs** avec les Clubs : matchs et résultats réels (foot, basket, tennis, chevaux…) via une API de données sportives ; cotes, paris simples/combinés, règlement automatique. À étudier : source des données (gratuite, fiable), fréquence de mise à jour.
 - [ ] Amis : messages entre amis ? (pas prioritaire, utilité à confirmer).
 

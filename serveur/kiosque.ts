@@ -42,6 +42,8 @@ export class Kiosque {
 
   /** Missions et annonces des gros gains (branché par l'application). */
   activites: Activites | null = null;
+  /** Un gain à un tirage (pour prévenir le joueur s'il n'est pas là pour le voir). */
+  surGainTirage: ((u: number, jeu: 'Keno' | 'Loto Flash', gain: number, texte: string) => void) | null = null;
 
   constructor(private db: Base, private porte: Portefeuilles, private horloge: () => number = Date.now, private hasard: Hasard = hasardSur) {
     migrerKiosque(db);
@@ -171,7 +173,7 @@ export class Kiosque {
       for (const g of this.db.prepare('SELECT id, utilisateur, numeros, mise FROM keno_grilles WHERE tirage = ? AND gain IS NULL').all(id) as { id: number; utilisateur: number; numeros: string; mise: number }[]) {
         const gain = gainKeno(JSON.parse(g.numeros), tirage, g.mise);
         this.db.prepare('UPDATE keno_grilles SET gain = ? WHERE id = ?').run(gain, g.id);
-        if (gain) this.porte.crediter(g.utilisateur, gain, `Gain Keno n° ${id}`);
+        if (gain) { this.porte.crediter(g.utilisateur, gain, `Gain Keno n° ${id}`); this.surGainTirage?.(g.utilisateur, 'Keno', gain, `Ta grille du tirage n° ${id} rapporte ${fmtClubs(gain)}`); }
         if (gain >= 2_000 && gain >= g.mise * 20) this.activites?.annoncer(g.utilisateur, `a gagné ${fmtClubs(gain)} au Keno`, gain);
       }
     }
@@ -189,7 +191,10 @@ export class Kiosque {
       for (const { g, r } of rangs) {
         const gain = !r ? 0 : r.gain === 'cagnotte' ? Math.floor(cagnotte / jackpot) : r.gain;
         this.db.prepare('UPDATE loto_grilles SET gain = ?, rang = ? WHERE id = ?').run(gain, r?.nom ?? null, g.id);
-        if (gain) this.porte.crediter(g.utilisateur, gain, r?.gain === 'cagnotte' ? `Cagnotte du Loto Flash !` : `Gain Loto Flash n° ${id}`);
+        if (gain) {
+          this.porte.crediter(g.utilisateur, gain, r?.gain === 'cagnotte' ? `Cagnotte du Loto Flash !` : `Gain Loto Flash n° ${id}`);
+          this.surGainTirage?.(g.utilisateur, 'Loto Flash', gain, r?.gain === 'cagnotte' ? `Tu as décroché la cagnotte : ${fmtClubs(gain)} !` : `Ta grille du tirage n° ${id} (${r?.nom ?? ''}) rapporte ${fmtClubs(gain)}`);
+        }
         if (gain >= 10_000) this.activites?.annoncer(g.utilisateur, r?.gain === 'cagnotte' ? `a décroché la cagnotte du Loto Flash : ${fmtClubs(gain)} !` : `a gagné ${fmtClubs(gain)} au Loto Flash`, gain);
       }
       if (jackpot) this.fixerCagnotte(LOTO.cagnotteDepart);

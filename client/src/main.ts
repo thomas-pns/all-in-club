@@ -22,6 +22,7 @@ import { SalleBJ, ReglagesBJ, MessageBJ } from '../../moteur/blackjack/salleBJ';
 import { EcranRoulette, CanalRoulette } from './ui/roulette';
 import { SalleRoulette, ReglagesRoulette, MessageRoulette } from '../../moteur/roulette/salleRoulette';
 import { EcranHall } from './ui/club';
+import { ecranBienvenue } from './ui/bienvenue';
 import { carteInvitation } from './ui/amis';
 import type { JeuCasino } from './ui/ecrans';
 import { ecranConnexion, ecranReinitialiser, ecranCreation, ecranJoueurs, ecranProfilJoueur, annoncerSucces, afficherBanniere } from './ui/ecrans';
@@ -44,6 +45,7 @@ function fermerTable() { table?.detruire(); table = null; }
 
 async function demarrer() {
   const params = new URLSearchParams(location.search);
+  if (location.pathname.replace(/\/$/, '') === '/bienvenue') return ecranBienvenue(app, () => { history.replaceState(null, '', '/'); void demarrer(); });
   const reinit = params.get('reinitialiser');
   if (reinit) return ecranReinitialiser(app, reinit, () => allerConnexion());
   const jeton = jetonEnregistre();
@@ -132,6 +134,7 @@ function surMessage(m: MessageServeur) {
       else if (m.evenement === 'cadeau') afficherBanniere({ icone: '🎁', surtitre: 'Cadeau !', titre: `${esc(d.pseudo)} t'offre ${(m.montant ?? 0).toLocaleString('fr-FR')} <i class="pc"></i>`, genre: 'gain', son: 'grosGain', avant: () => hall?.rafraichirPortefeuille() });
       break;
     }
+    case 'notif': hall?.nouvelleNotif(m.notif, m.nonLues); break;
     case 'mission': {
       const etat = m.etat;
       // La récompense (et le solde) n'apparaît qu'une fois le résultat vu à l'écran
@@ -170,7 +173,8 @@ function allerHall() {
     solo: (jeu) => allerSolo(jeu),
     profil: () => allerProfil(),
     joueurs: () => allerJoueurs(),
-    casino: (jeu, ville) => { debloquerSon(); r.envoyer({ type: 'casino', jeu, ville }); },
+    casino: (jeu, ville, inviter) => { debloquerSon(); r.envoyer({ type: 'casino', jeu, ville, inviter }); },
+    creerPrivee: (jeu, ville, inviter) => { debloquerSon(); r.envoyer({ type: 'creer', jeu, casino: ville, inviter, reglages: {} }); },
   });
   r.envoyer({ type: 'hall' });
 }

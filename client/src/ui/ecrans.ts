@@ -47,6 +47,7 @@ export function ecranConnexion(racine: HTMLElement, opts: { onConnecte: (u: Util
       <div style="text-align:center;margin-top:14px"><button class="lien" data-oubli>Mot de passe oublié ?</button></div>
     </div>
     <div style="text-align:center;margin-top:20px"><button class="btn btn-ciel" data-solo>🤖 Jouer en solo, sans compte</button></div>
+    <div style="text-align:center;margin-top:14px"><a class="lien" href="/bienvenue">C'est quoi All-In Club ? · Installer l'appli</a></div>
   </div></div>`);
   racine.replaceChildren(el);
   $('[data-avatars]', el).appendChild(choixAvatars(av, (a) => (av = a)));

@@ -151,11 +151,24 @@ function salon(p: Palette) {
     <path d="M${x0 - 8} 120 h316 l-10 -18 h-296z" fill="#4A3A6E" ${S}/>
     <rect x="${x0 + 50}" y="132" width="200" height="32" rx="16" fill="${T}" ${S}/>
     <text x="${x0 + 150}" y="155" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="700" font-size="19" fill="#FF7FD0" class="neon">Entre potes</text>
-    <!-- La grande vitrine : une table de poker entre amis -->
-    <rect x="${x0 + 20}" y="178" width="170" height="${SOL - 190}" rx="10" fill="${p.allume ? '#FFD98A' : '#CFEFFF'}" ${S}/>
-    <ellipse cx="${x0 + 105}" cy="${SOL - 30}" rx="62" ry="20" fill="#25A05C" ${S}/>
-    ${[[x0 + 52, SOL - 58, '#8EE07A'], [x0 + 92, SOL - 66, '#FFC23D'], [x0 + 134, SOL - 64, '#FF9AC1'], [x0 + 160, SOL - 52, '#46C2F0']].map(([x, y, c], i) => `<g class="pote" style="animation-delay:${i * 0.5}s;transform-origin:${x}px ${(y as number) + 14}px"><circle cx="${x}" cy="${y}" r="11" fill="${c}" ${s}/><circle cx="${(x as number) - 3.5}" cy="${(y as number) - 2}" r="1.6" fill="${T}"/><circle cx="${(x as number) + 3.5}" cy="${(y as number) - 2}" r="1.6" fill="${T}"/><path d="M${(x as number) - 4} ${(y as number) + 4} q4 3 8 0" fill="none" stroke="${T}" stroke-width="1.4"/></g>`).join('')}
-    ${[[x0 + 86, SOL - 34], [x0 + 104, SOL - 30], [x0 + 122, SOL - 34]].map(([x, y]) => `<rect x="${x}" y="${y}" width="10" height="13" rx="2" fill="#FFF4DF" ${s}/>`).join('')}
+    <!-- La grande vitrine : des potes autour d'une table, une lampe au-dessus -->
+    <rect x="${x0 + 16}" y="176" width="178" height="${SOL - 186}" rx="12" fill="#4A3A6E" ${S}/>
+    <clipPath id="vitre-salon"><rect x="${x0 + 22}" y="182" width="166" height="${SOL - 198}" rx="8"/></clipPath>
+    <g clip-path="url(#vitre-salon)">
+      <rect x="${x0 + 22}" y="182" width="166" height="${SOL - 198}" fill="${p.allume ? '#FFD98A' : '#FFE9C2'}"/>
+      <rect x="${x0 + 22}" y="${SOL - 44}" width="166" height="40" fill="${p.allume ? '#E9A55A' : '#F2C48B'}"/>
+      <path d="M${x0 + 105} 182 v14" stroke="${T}" stroke-width="1.6"/>
+      <path d="M${x0 + 88} 206 q17 -16 34 0z" fill="#FF6B5B" ${s}/>
+      ${p.allume ? `<path d="M${x0 + 90} 206 l-26 44 h82 l-26 -44z" fill="#FFF4DF" opacity=".35"/>` : ''}
+      ${[[x0 + 58, '#8EE07A', '#43B072'], [x0 + 86, '#FFC23D', '#E59A12'], [x0 + 126, '#FF9AC1', '#E5484D'], [x0 + 154, '#46C2F0', '#2E7FB8']].map(([x, c, h], i) => `<g class="pote" style="animation-delay:${i * 0.5}s;transform-origin:${x}px ${SOL - 40}px">
+        <path d="M${(x as number) - 11} ${SOL - 30} q0 -16 11 -16 q11 0 11 16z" fill="${h}" ${s}/>
+        <circle cx="${x}" cy="${SOL - 56}" r="10" fill="${c}" ${s}/>
+        <circle cx="${(x as number) - 3.5}" cy="${SOL - 58}" r="1.5" fill="${T}"/><circle cx="${(x as number) + 3.5}" cy="${SOL - 58}" r="1.5" fill="${T}"/>
+        <path d="M${(x as number) - 3.5} ${SOL - 52} q3.5 3 7 0" fill="none" stroke="${T}" stroke-width="1.4" stroke-linecap="round"/></g>`).join('')}
+      <path d="M${x0 + 44} ${SOL - 26} q61 -16 122 0 v6 q-61 12 -122 0z" fill="#25A05C" ${S}/>
+      ${[[x0 + 92, -1], [x0 + 104, 0], [x0 + 116, 1]].map(([x, r]) => `<rect x="${x}" y="${SOL - 31}" width="9" height="12" rx="2" fill="#FFF4DF" ${s} transform="rotate(${(r as number) * 8} ${(x as number) + 4.5} ${SOL - 25})"/>`).join('')}
+      <circle cx="${x0 + 70}" cy="${SOL - 27}" r="3.5" fill="#E5484D" ${s}/><circle cx="${x0 + 140}" cy="${SOL - 27}" r="3.5" fill="#46C2F0" ${s}/>
+    </g>
     <path d="M${x0 + 214} ${SOL} v-84 q30 -22 60 0 v84z" fill="#5A3A2A" ${S}/>
     <circle cx="${x0 + 266}" cy="${SOL - 40}" r="2.4" fill="#FFC23D"/>
     ${[x0 + 206, x0 + 284].map((x) => `<g><rect x="${x - 8}" y="${SOL - 16}" width="16" height="16" fill="#A86B3C" ${s}/><path d="M${x} ${SOL - 16} q-12 -10 -6 -24 q4 8 6 4 q2 -14 8 -16 q2 12 -2 18 q10 -6 10 4 q-6 8 -16 14z" fill="#43B072" ${s}/></g>`).join('')}
@@ -173,47 +186,77 @@ function reverbere(x: number, p: Palette) {
 }
 
 /** Les véhicules, dessinés vers la droite autour de (0, 0) = roue arrière au sol. */
-const VEHICULES = {
-  supercar: (c: string, phares: boolean) => `
-    ${phares ? '<path d="M72 -10 l60 -6 v20z" fill="#FFF4DF" opacity=".35"/>' : ''}
+const roue = (x: number, r = 8, jante = '#C7C2D6') => `<circle cx="${x}" cy="${-r + 2}" r="${r}" fill="${T}"/><circle cx="${x}" cy="${-r + 2}" r="${(r * 0.42).toFixed(1)}" fill="${jante}"/>`;
+const faisceau = (x: number, y: number, phares: boolean) => (phares ? `<path d="M${x} ${y} l58 -7 v20z" fill="#FFF4DF" opacity=".35"/>` : '');
+const tete = (x: number, y: number, peau: string, cheveux: string) => `<circle cx="${x}" cy="${y}" r="6.5" fill="${peau}" ${s}/><path d="M${x - 6.5} ${y - 1} q1 -8 6.5 -8 q6 0 6.5 7 q-4 -4 -13 1z" fill="${cheveux}"/>`;
+export const VEHICULES = {
+  /* --- Les voitures de riches --- */
+  supercar: (c: string, phares: boolean) => `${faisceau(70, -12, phares)}
     <path d="M-12 -4 v-8 l6 -6 l34 -8 q16 -4 28 4 l22 10 q4 2 4 8 z" fill="${c}" ${S}/>
-    <path d="M24 -24 l16 -5 q8 -1 12 4 l6 5 h-34z" fill="#BFE8FF" ${s}/>
+    <path d="M26 -23 l14 -4 q8 -1 12 4 l5 4 h-31z" fill="#BFE8FF" ${s}/>
     <path d="M-12 -14 l-6 -8 h10 l6 6" fill="${T}"/>
-    <circle cx="0" cy="-2" r="7" fill="${T}"/><circle cx="0" cy="-2" r="3" fill="#C7C2D6"/>
-    <circle cx="56" cy="-2" r="7" fill="${T}"/><circle cx="56" cy="-2" r="3" fill="#C7C2D6"/>
-    <path d="M66 -10 h8" stroke="#FFF4DF" stroke-width="3" stroke-linecap="round"/>`,
-  moto: (c: string, phares: boolean) => `
-    ${phares ? '<path d="M44 -14 l50 -6 v18z" fill="#FFF4DF" opacity=".35"/>' : ''}
-    <circle cx="0" cy="-8" r="9" fill="none" stroke="${T}" stroke-width="4"/><circle cx="40" cy="-8" r="9" fill="none" stroke="${T}" stroke-width="4"/>
-    <path d="M0 -8 l14 -12 h16 l10 12 M30 -20 l8 -6" fill="none" stroke="${T}" stroke-width="3"/>
-    <path d="M8 -18 q12 -10 26 -2 l-4 6 h-20z" fill="${c}" ${s}/>
-    <path d="M14 -24 l6 -14 l8 2 l-2 12z" fill="#2E2A6B" ${s}/>
-    <circle cx="22" cy="-42" r="7" fill="${c}" ${s}/><path d="M24 -44 h6 v4 h-6z" fill="#BFE8FF"/>
-    <path class="fumee" d="M-14 -6 q-6 -2 -10 2" fill="none" stroke="#C7C2D6" stroke-width="3" stroke-linecap="round"/>`,
-  cabriolet: (c: string, phares: boolean) => `
-    ${phares ? '<path d="M70 -12 l56 -6 v20z" fill="#FFF4DF" opacity=".35"/>' : ''}
-    <path d="M-14 -4 v-14 q0 -6 8 -6 h18 l8 -6 h20 l10 6 h22 q8 0 8 8 v12z" fill="${c}" ${S}/>
-    <circle cx="26" cy="-34" r="7" fill="#FFD9B0" ${s}/><path d="M20 -38 q6 -8 12 0" fill="#7B4A2E"/>
-    <path d="M38 -30 l6 -8" stroke="${T}" stroke-width="2"/>
-    <circle cx="2" cy="-3" r="8" fill="${T}"/><circle cx="2" cy="-3" r="3.4" fill="#FFF4DF"/>
-    <circle cx="52" cy="-3" r="8" fill="${T}"/><circle cx="52" cy="-3" r="3.4" fill="#FFF4DF"/>`,
-  limousine: (c: string, phares: boolean) => `
-    ${phares ? '<path d="M110 -12 l56 -6 v20z" fill="#FFF4DF" opacity=".35"/>' : ''}
+    ${roue(0, 7)}${roue(56, 7)}
+    <path d="M66 -10 h7" stroke="#FFF4DF" stroke-width="3" stroke-linecap="round"/>`,
+  cabriolet: (c: string, phares: boolean) => `${faisceau(70, -12, phares)}
+    ${tete(24, -31, '#FFD9B0', '#7B4A2E')}${tete(8, -29, '#C98B5E', '#2A1E3F')}
+    <path d="M-14 -4 v-14 q0 -6 8 -6 h40 l6 -8 h4 l-2 8 h26 q8 0 8 8 v12z" fill="${c}" ${S}/>
+    <path d="M38 -24 l5 -9" stroke="#BFE8FF" stroke-width="3" stroke-linecap="round"/>
+    ${roue(2)}${roue(52)}`,
+  limousine: (c: string, phares: boolean) => `${faisceau(108, -12, phares)}
     <path d="M-14 -4 v-14 q0 -6 8 -6 h14 l10 -10 h70 l10 10 h18 q8 0 8 8 v12z" fill="${c}" ${S}/>
-    ${[12, 34, 56, 78].map((x) => `<rect x="${x}" y="-32" width="18" height="9" rx="2" fill="#2A2340"/>`).join('')}
-    <circle cx="4" cy="-3" r="8" fill="${T}"/><circle cx="4" cy="-3" r="3.4" fill="#C7C2D6"/>
-    <circle cx="94" cy="-3" r="8" fill="${T}"/><circle cx="94" cy="-3" r="3.4" fill="#C7C2D6"/>`,
+    ${[22, 42, 62].map((x) => `<rect x="${x}" y="-31" width="16" height="8" rx="2" fill="#2A2340"/>`).join('')}
+    <path d="M82 -31 h6 l7 8 h-13z" fill="#BFE8FF" ${s}/>
+    <path d="M-14 -12 h120" stroke="${T}" stroke-width="1.2" opacity=".5"/>
+    ${roue(6)}${roue(92)}`,
+  /* --- Les voitures de tous les jours --- */
+  citadine: (c: string, phares: boolean) => `${faisceau(56, -12, phares)}
+    <path d="M-12 -4 v-13 q0 -6 7 -6 h6 l9 -12 q2 -2 5 -2 h18 q3 0 5 2 l9 12 h3 q8 0 8 7 v12z" fill="${c}" ${S}/>
+    <path d="M6 -23 l7 -10 h8 v10z M25 -23 v-10 h9 l7 10z" fill="#BFE8FF" ${s}/>
+    ${roue(0, 7.5)}${roue(40, 7.5)}`,
+  berline: (c: string, phares: boolean) => `${faisceau(72, -12, phares)}
+    <path d="M-14 -4 v-13 q0 -6 8 -6 h12 l10 -11 q2 -2 6 -2 h24 q4 0 6 2 l10 11 h12 q8 0 8 7 v12z" fill="${c}" ${S}/>
+    <path d="M10 -23 l8 -9 h11 v9z M33 -23 v-9 h12 l8 9z" fill="#BFE8FF" ${s}/>
+    ${roue(2)}${roue(54)}`,
+  taxi: (c: string, phares: boolean) => `${faisceau(56, -12, phares)}
+    <rect x="13" y="-42" width="16" height="6" rx="2" fill="#FFF4DF" ${s}/>
+    <path d="M-12 -4 v-13 q0 -6 7 -6 h6 l9 -12 q2 -2 5 -2 h18 q3 0 5 2 l9 12 h3 q8 0 8 7 v12z" fill="${c}" ${S}/>
+    <path d="M6 -23 l7 -10 h8 v10z M25 -23 v-10 h9 l7 10z" fill="#BFE8FF" ${s}/>
+    <path d="M-10 -13 h56" stroke="${T}" stroke-width="3" stroke-dasharray="4 4"/>
+    ${roue(0, 7.5)}${roue(40, 7.5)}`,
+  camionnette: (c: string, phares: boolean) => `${faisceau(64, -12, phares)}
+    <path d="M-12 -4 v-38 q0 -4 4 -4 h48 l14 18 q6 2 6 8 v16z" fill="${c}" ${S}/>
+    <path d="M42 -42 l11 14 h-11z" fill="#BFE8FF" ${s}/>
+    <path d="M38 -44 v40" stroke="${T}" stroke-width="1.6"/>
+    <text x="13" y="-20" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="700" font-size="7" fill="${T}">LIVRAISON</text>
+    ${roue(2)}${roue(48)}`,
+  /* --- La moto : roues à rayons, pot chromé, pilote casqué --- */
+  moto: (c: string, phares: boolean) => `${faisceau(48, -18, phares)}
+    <circle cx="0" cy="-9" r="9" fill="#2E2840" stroke="${T}" stroke-width="2.5"/><circle cx="0" cy="-9" r="3" fill="#C7C2D6"/>
+    <circle cx="42" cy="-9" r="9" fill="#2E2840" stroke="${T}" stroke-width="2.5"/><circle cx="42" cy="-9" r="3" fill="#C7C2D6"/>
+    <path d="M2 -10 h16" stroke="#C7C2D6" stroke-width="3.4" stroke-linecap="round"/><path d="M2 -10 h16" stroke="${T}" stroke-width="1" stroke-linecap="round" opacity=".5"/>
+    <path d="M0 -9 l12 -10 M42 -9 l-8 -18 l4 -4" fill="none" stroke="${T}" stroke-width="3" stroke-linecap="round"/>
+    <path d="M8 -20 q2 -6 10 -6 h8 q8 -1 12 4 l-4 6 h-24z" fill="${c}" ${s}/>
+    <path d="M6 -22 q6 -4 14 -2 v3 h-14z" fill="${T}"/>
+    <path d="M15 -22 l9 9" stroke="${T}" stroke-width="7" stroke-linecap="round"/><path d="M15 -22 l9 9" stroke="#3E4A6B" stroke-width="4" stroke-linecap="round"/>
+    <path d="M16 -23 L24 -37" stroke="${T}" stroke-width="11" stroke-linecap="round"/><path d="M16 -23 L24 -37" stroke="#3E4A6B" stroke-width="7.5" stroke-linecap="round"/>
+    <path d="M24 -35 L35 -28" stroke="${T}" stroke-width="6" stroke-linecap="round"/><path d="M24 -35 L35 -28" stroke="#3E4A6B" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="27" cy="-45" r="7.5" fill="${c}" ${s}/><path d="M29 -48 h6 q1.5 3.5 -1 6 h-5z" fill="#BFE8FF" ${s}/>
+    <circle class="fumee" cx="-6" cy="-10" r="3" fill="#C7C2D6" opacity=".6"/>`,
 };
 
 function circulation(p: Palette) {
+  // Voie du fond (vers la droite) dessinée d'abord, puis celle de devant : pas de tête qui dépasse d'une voiture
   const v = [
     { t: 'supercar', c: '#FFC23D', voie: 0, duree: 7, delai: 0 },
-    { t: 'moto', c: '#E5484D', voie: 1, duree: 9, delai: 3 },
-    { t: 'cabriolet', c: '#46C2F0', voie: 0, duree: 12, delai: 6 },
-    { t: 'supercar', c: '#E5484D', voie: 1, duree: 6.5, delai: 9 },
-    { t: 'limousine', c: '#FFF4DF', voie: 0, duree: 14, delai: 13 },
-    { t: 'supercar', c: '#8EE07A', voie: 0, duree: 7.5, delai: 19 },
-    { t: 'moto', c: '#8E5BD6', voie: 1, duree: 8.5, delai: 22 },
+    { t: 'citadine', c: '#46C2F0', voie: 0, duree: 10, delai: 4 },
+    { t: 'cabriolet', c: '#E5484D', voie: 0, duree: 12, delai: 9 },
+    { t: 'limousine', c: '#2A2340', voie: 0, duree: 14, delai: 15 },
+    { t: 'camionnette', c: '#FFF4DF', voie: 0, duree: 13, delai: 21 },
+    { t: 'taxi', c: '#FFC23D', voie: 1, duree: 9, delai: 2 },
+    { t: 'moto', c: '#E5484D', voie: 1, duree: 8, delai: 7 },
+    { t: 'berline', c: '#8EE07A', voie: 1, duree: 11, delai: 12 },
+    { t: 'supercar', c: '#8E5BD6', voie: 1, duree: 6.5, delai: 17 },
+    { t: 'berline', c: '#FF9AC1', voie: 1, duree: 10, delai: 23 },
   ] as const;
   return v.map((x) => {
     const y = x.voie ? SOL + 46 : SOL + 26;
