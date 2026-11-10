@@ -90,6 +90,26 @@ export class Administration {
     return { pseudo: u.pseudo, mdp };
   }
 
+  private exigerTest(id: number) {
+    const u = this.existe(id);
+    if (!this.porte.estTest(id)) throw new ErreurAdmin('Seulement pour les comptes de test');
+    return u;
+  }
+
+  /** Se glisser dans un compte de test sans son mot de passe. */
+  incarner(id: number) {
+    this.exigerTest(id);
+    return { jeton: this.comptes.sessionPour(id) };
+  }
+
+  /** Supprimer un compte de test (et tout ce qui va avec). */
+  supprimerTest(id: number, connecte: boolean) {
+    this.exigerTest(id);
+    if (connecte) throw new ErreurAdmin('Ce compte est connecté : déconnecte-le d\'abord');
+    this.db.prepare('DELETE FROM utilisateurs WHERE id = ?').run(id);
+    return { ok: true };
+  }
+
   /** Un compte de test tout neuf (mot de passe affiché une seule fois). */
   async creerTest() {
     let n = 1;

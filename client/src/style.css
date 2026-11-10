@@ -1404,3 +1404,4 @@ select.select-cache { position: absolute !important; opacity: 0; pointer-events:
 .ico-ios { display: inline-block; border: 2px solid currentColor; border-radius: 5px; padding: 0 4px; font-size: 12px; }
 .bienvenue .grand { font-size: 20px; margin-top: 10px; }
 [data-installer][hidden] { display: none; }
+[data-revenir] { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 30; box-shadow: 0 4px 0 var(--trait), 0 6px 18px rgba(0,0,0,.4); }

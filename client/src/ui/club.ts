@@ -20,6 +20,7 @@ import { jouerSon } from '../vue/son';
 import { $, $$, esc, html, toast, panneau, avatar, avecPieces, logoHTML } from './commun';
 import { vueVitrine, vueTicket, vueKeno, vueLoto, ContexteKiosque } from './kiosque';
 import { vueAmis, choisirAmis } from './amis';
+import { compteAdminEnAttente, revenirAuCompteAdmin } from '../reseau';
 import { ouvrirCloche, type Notif } from './cloche';
 import { ouvrirAdmin } from './admin';
 import type { TypeTicket } from '../../../moteur/kiosque';
@@ -134,7 +135,10 @@ export class EcranHall {
   private majPiedPlan() {
     const z = this.el.querySelector('[data-pied-plan]') as HTMLElement | null;
     if (!z) return;
-    z.innerHTML = this.admin ? '<button class="btn btn-petit btn-fantome" data-admin>🛠️ Mode admin</button>' : '';
+    z.innerHTML = (this.admin ? '<button class="btn btn-petit btn-fantome" data-admin>🛠️ Mode admin</button>' : '')
+      + (compteAdminEnAttente() ? ' <button class="btn btn-petit btn-or" data-revenir>↩ Revenir à mon compte</button>' : '');
+    const rev = z.querySelector('[data-revenir]') as HTMLElement | null;
+    if (rev) rev.onclick = () => revenirAuCompteAdmin();
     const b = z.querySelector('[data-admin]') as HTMLElement | null;
     if (b) b.onclick = () => ouvrirAdmin(() => this.rafraichirPortefeuille());
   }

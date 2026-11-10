@@ -278,6 +278,7 @@ export class SceneBJ {
         this.badgeMain(m.badge, mv.issue ? LIBELLES[mv.issue] : null, mv.total, mv.souple, mv.cartes.length, mv.issue ? mv.retour - mv.mise : 0);
         const der = this.posCarte(p, mi, mains.length, Math.max(0, mv.cartes.length - 1));
         m.badge.position.set(der.x + g.carte * 0.35, der.y - g.carte * 0.82);
+        m.badge.visible = true;
         const actif = e.aParler?.siege === i && e.aParler.main === mi;
         m.cartes.forEach((c) => (c.tint = actif || !e.aParler || e.aParler.siege !== i ? 0xffffff : 0x9a9aaa));
       });
@@ -512,6 +513,11 @@ export class SceneBJ {
             sp = this.nouvelleCarte(null, cible.w);
             if (!p.mains[ev.main]) { const pile = new PileJetons(13); this.coucheTable.addChild(pile); const badge = new Container(); this.coucheEffets.addChild(badge); p.mains[ev.main] = { cartes: [], badge, pile }; }
             p.mains[ev.main].cartes[k] = sp;
+            // Le total de la main suivait l'ancienne dernière carte : on le cache le temps de la donne
+            // (sinon il recouvre la nouvelle carte, et l'étiquette « Sauté » la cache complètement)
+            const b = p.mains[ev.main].badge;
+            b.visible = false;
+            b.position.set(cible.x + g.carte * 0.35, cible.y - g.carte * 0.82);
             if (k === 0 && ev.main === 0) { p.mains[0].pile.position.set(p.cercle.x, p.cercle.y + 6); p.mains[0].pile.maj(p.pile.montant); p.pile.maj(0); }
           }
           sp.position.set(g.sabot.x, g.sabot.y);
@@ -576,6 +582,9 @@ export class SceneBJ {
           const [txt, fond, coul] = LIBELLES[ev.issue];
           if (m) {
             this.badgeMain(m.badge, [txt, fond, coul], 0, false, 1, ev.retour - ev.mise);
+            const der = m.cartes[m.cartes.length - 1];
+            if (der) m.badge.position.set(der.x + g.carte * 0.35, der.y - g.carte * 0.82);
+            m.badge.visible = true;
             const pos = m.pile.position;
             if (ev.retour > ev.mise) { jouerSon(ev.issue === 'blackjack' ? 'grosGain' : 'gagne'); await this.voler(ev.retour - ev.mise, g.plateau, pos, 300); m.pile.maj(ev.retour); }
             else if (ev.retour === 0) { await this.voler(m.pile.montant, pos, g.plateau, 300); m.pile.maj(0); }

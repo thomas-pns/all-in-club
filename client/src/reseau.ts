@@ -13,6 +13,21 @@ export function enregistrerJeton(j: string | null) {
   try { if (j) localStorage.setItem(CLE_JETON, j); else localStorage.removeItem(CLE_JETON); } catch { /* navigation privée */ }
 }
 
+/** Mode admin : passer dans un compte de test, puis revenir au sien. */
+const CLE_ADMIN = 'aic-jeton-admin';
+export function compteAdminEnAttente(): boolean {
+  try { return !!localStorage.getItem(CLE_ADMIN); } catch { return false; }
+}
+export function passerAuCompte(jeton: string) {
+  try { const actuel = localStorage.getItem(CLE_JETON); if (actuel && !localStorage.getItem(CLE_ADMIN)) localStorage.setItem(CLE_ADMIN, actuel); } catch { /* rien */ }
+  enregistrerJeton(jeton);
+  location.href = '/';
+}
+export function revenirAuCompteAdmin() {
+  try { const a = localStorage.getItem(CLE_ADMIN); if (a) { localStorage.removeItem(CLE_ADMIN); enregistrerJeton(a); } } catch { /* rien */ }
+  location.href = '/';
+}
+
 export class ErreurApi extends Error { constructor(message: string, public statut: number) { super(message); } }
 
 export async function api<T = any>(chemin: string, corps?: unknown, methode?: string): Promise<T> {

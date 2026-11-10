@@ -2,7 +2,7 @@
  * Le mode admin (réservé au patron du Club) : joueurs et comptes de test, surveillance de l'argent,
  * réglage des récompenses (missions, Grande Roue, série de 7 jours).
  */
-import { api, ErreurApi } from '../reseau';
+import { api, ErreurApi, passerAuCompte } from '../reseau';
 import { fmt } from '../art/rendu';
 import { avatarSVG } from '../art/avatars';
 import { $, $$, esc, panneau, toast, confirmer } from './commun';
@@ -44,11 +44,18 @@ export function ouvrirAdmin(majSolde: () => void) {
       <div class="admin-joueurs">${d.joueurs.map((j) => `<div class="admin-joueur ${j.test ? 'test' : ''}">
         <span class="av">${avatarSVG(j.avatar as never, 'content', 38)}${j.enLigne ? '<i></i>' : ''}</span>
         <span class="txt"><b>${esc(j.pseudo)}${j.test ? ' <span class="etiq-test">TEST</span>' : ''}</b><small>${fmt(j.solde)} ♣ · inscrit le ${date(j.cree)} · vu le ${date(j.derniere)}${j.email ? ' · e-mail ✓' : ''}</small></span>
-        <span class="actions"><button class="btn btn-petit" data-clubs="${j.id}" data-p="${esc(j.pseudo)}">± Clubs</button><button class="btn btn-petit btn-fantome" data-test="${j.id}">${j.test ? 'Fin du test' : 'Mode test'}</button><button class="btn btn-petit btn-fantome" data-mdp="${j.id}" data-p="${esc(j.pseudo)}">Mot de passe</button></span>
+        <span class="actions"><button class="btn btn-petit" data-clubs="${j.id}" data-p="${esc(j.pseudo)}">± Clubs</button><button class="btn btn-petit btn-fantome" data-test="${j.id}">${j.test ? 'Fin du test' : 'Mode test'}</button>${j.test ? `<button class="btn btn-petit btn-ciel" data-incarner="${j.id}">Jouer avec</button><button class="btn btn-petit btn-corail" data-suppr="${j.id}" data-p="${esc(j.pseudo)}">Supprimer</button>` : `<button class="btn btn-petit btn-fantome" data-mdp="${j.id}" data-p="${esc(j.pseudo)}">Mot de passe</button>`}</span>
       </div>`).join('')}</div>`;
     $('[data-nouveau-test]', zone).onclick = async () => {
       try { const r = await api<{ pseudo: string; mdp: string }>('/api/admin/test', {}); afficherIdentifiants(r.pseudo, r.mdp, 'Compte de test créé'); void joueurs(); } catch (e) { erreur(e); }
     };
+    $$('[data-incarner]', zone).forEach((b) => b.onclick = async () => {
+      try { const r = await api<{ jeton: string }>(`/api/admin/joueurs/${b.dataset.incarner}/incarner`, {}); passerAuCompte(r.jeton); } catch (e) { erreur(e); }
+    });
+    $$('[data-suppr]', zone).forEach((b) => b.onclick = async () => {
+      if (!(await confirmer(`Supprimer le compte ${b.dataset.p} pour de bon ?`, 'Supprimer'))) return;
+      try { await api(`/api/admin/joueurs/${b.dataset.suppr}`, undefined, 'DELETE'); toast('Compte supprimé'); void joueurs(); } catch (e) { erreur(e); }
+    });
     $$('[data-test]', zone).forEach((b) => b.onclick = async () => { try { await api(`/api/admin/joueurs/${b.dataset.test}/test`, {}); void joueurs(); } catch (e) { erreur(e); } });
     $$('[data-mdp]', zone).forEach((b) => b.onclick = async () => {
       if (!(await confirmer(`Donner un mot de passe provisoire à ${b.dataset.p} ?`, 'Oui, le changer'))) return;

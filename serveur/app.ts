@@ -24,7 +24,7 @@ import { Administration, ErreurAdmin } from './administration.js';
 import type { MessageAmi } from './amis.js';
 import { TICKETS, KENO, KENO_GAINS, LOTO, LOTO_GAINS } from '../moteur/kiosque.js';
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.4.1';
 
 export interface OptionsServeur {
   db: Base;
@@ -157,6 +157,8 @@ export async function creerServeur(o: OptionsServeur): Promise<{ app: FastifyIns
   app.post('/api/admin/joueurs/:id/test', async (req) => { exigerAdmin(req); return admin.basculerTest(idDe(req)); });
   app.post('/api/admin/joueurs/:id/mdp', async (req) => { exigerAdmin(req); return admin.motDePasseProvisoire(idDe(req)); });
   app.post('/api/admin/test', async (req) => { exigerAdmin(req); return admin.creerTest(); });
+  app.post('/api/admin/joueurs/:id/incarner', async (req) => { exigerAdmin(req); return admin.incarner(idDe(req)); });
+  app.delete('/api/admin/joueurs/:id', async (req) => { exigerAdmin(req); return admin.supprimerTest(idDe(req), hall.estConnecte(idDe(req))); });
   app.get('/api/admin/surveillance', async (req) => { exigerAdmin(req); return admin.surveillance(); });
   app.get('/api/admin/reglages', async (req) => { exigerAdmin(req); return admin.reglages(); });
   app.put('/api/admin/reglages', async (req) => { exigerAdmin(req); return admin.modifierReglages((req.body ?? {}) as never); });

@@ -78,6 +78,9 @@ export class Comptes {
     return { jeton: this.creerSession(Number(r.id)), utilisateur: ligneVersUtilisateur(r) };
   }
 
+  /** Session ouverte sans mot de passe (mode admin, comptes de test uniquement). */
+  sessionPour(id: number): string { return this.creerSession(id); }
+
   private creerSession(id: number): string {
     const jeton = nouveauJeton();
     this.db.prepare('INSERT INTO sessions (jeton, utilisateur, expire) VALUES (?, ?, ?)')
